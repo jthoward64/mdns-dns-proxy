@@ -1,0 +1,55 @@
+# mDNS-DNS Discovery Proxy Configuration
+# 
+# This file configures the behavior of the mDNS-DNS proxy server.
+# All settings have sensible defaults and are optional.
+
+[server]
+# IP address to bind the DNS server to
+# Default: 127.0.0.1 (localhost only)
+# Use 0.0.0.0 to listen on all interfaces
+bind_address = "127.0.0.1"
+
+# Port to bind the DNS server to
+# Default: 5353
+# Note: Ports below 1024 require root/admin privileges
+port = 5353
+
+# TCP connection timeout in seconds
+# Default: 30
+tcp_timeout = 30
+
+[cache]
+# Cache TTL (time-to-live) in seconds
+# How long to cache mDNS query results
+# Default: 120 (2 minutes)
+ttl_seconds = 120
+
+# Enable or disable result caching
+# Default: true
+enabled = true
+
+[logging]
+# Log level for the application
+# Options: trace, debug, info, warn, error
+# Default: info
+level = "info"
+
+[mdns]
+# Timeout for individual mDNS queries in milliseconds
+# Default: 1000 (1 second)
+query_timeout_ms = 1000
+
+# Timeout for service discovery operations in milliseconds
+# Default: 2000 (2 seconds)
+discovery_timeout_ms = 2000
+
+# Service types to query when resolving hostnames
+# These are used to discover devices by hostname
+# Default: _http._tcp.local., _ssh._tcp.local., _device-info._tcp.local.
+service_types = [
+    "_http._tcp.local.",
+    "_ssh._tcp.local.",
+    "_device-info._tcp.local.",
+    "_smb._tcp.local.",
+    "_afpovertcp._tcp.local.",
+]

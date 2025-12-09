@@ -22,13 +22,13 @@ pub struct MdnsResolver {
 
 impl MdnsResolver {
     /// Create a new mDNS resolver
-    pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn new(cache_ttl: Duration) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let daemon = ServiceDaemon::new()?;
         
         Ok(Self {
             daemon,
             cache: Arc::new(RwLock::new(HashMap::new())),
-            cache_ttl: Duration::from_secs(120),
+            cache_ttl,
         })
     }
 

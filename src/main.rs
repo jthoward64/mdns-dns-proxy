@@ -1,10 +1,13 @@
+mod config;
 mod dns_handler;
 mod mdns_resolver;
 
+use crate::config::{Args, Config};
 use crate::dns_handler::MdnsDnsHandler;
 use crate::mdns_resolver::MdnsResolver;
+use clap::Parser;
 use hickory_server::ServerFuture;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, UdpSocket};
 use tracing::{error, info};
@@ -12,15 +15,32 @@ use tracing_subscriber;
 
 #[tokio::main]
 async fn main() {
-    // Initialize tracing/logging
+    // Parse command-line arguments
+    let args = Args::parse();
+    
+    // Load configuration
+    let config = match Config::load(args) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to load configuration: {}", e);
+            std::process::exit(1);
+        }
+    };
+    
+    // Initialize tracing/logging with configured level
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
+        .with_max_level(config.parse_log_level())
         .init();
 
     info!("Starting mDNS-DNS Discovery Proxy (RFC 8766)");
+    info!("Configuration: bind={}:{}, cache_ttl={}s, cache_enabled={}", 
+          config.server.bind_address, 
+          config.server.port, 
+          config.cache.ttl_seconds,
+          config.cache.enabled);
 
-    // Create mDNS resolver
-    let resolver = match MdnsResolver::new() {
+    // Create mDNS resolver with configured cache TTL
+    let resolver = match MdnsResolver::new(config.cache_ttl()) {
         Ok(r) => Arc::new(r),
         Err(e) => {
             error!("Failed to create mDNS resolver: {}", e);
@@ -32,8 +52,8 @@ async fn main() {
     // Create DNS handler
     let handler = MdnsDnsHandler::new(resolver);
 
-    // Configure server address
-    let listen_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 5333);
+    // Configure server address from config
+    let listen_addr = SocketAddr::new(config.server.bind_address, config.server.port);
     
     info!("Binding DNS server to {}", listen_addr);
 
@@ -64,13 +84,18 @@ async fn main() {
     server.register_socket(udp_socket);
     info!("Registered UDP socket");
 
-    // Register TCP listener
-    server.register_listener(tcp_listener, std::time::Duration::from_secs(30));
+    // Register TCP listener with configured timeout
+    server.register_listener(
+        tcp_listener, 
+        std::time::Duration::from_secs(config.server.tcp_timeout)
+    );
     info!("Registered TCP listener");
 
     info!("mDNS-DNS proxy server is running!");
     info!("Query .local domains via this DNS server at {}", listen_addr);
-    info!("Example: dig @127.0.0.1 -p 5353 hostname.local");
+    info!("Example: dig @{} -p {} hostname.local", 
+          config.server.bind_address, 
+          config.server.port);
 
     // Run the server
     match server.block_until_done().await {

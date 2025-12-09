@@ -110,11 +110,89 @@ echo "port 5353" | sudo tee -a /etc/resolver/local
 
 ## Configuration
 
-The server can be configured by modifying constants in the source code:
+The server can be configured in three ways (in order of precedence):
 
-- **Listen Address**: Change `listen_addr` in `src/main.rs` (default: `127.0.0.1:5353`)
-- **Cache TTL**: Modify `cache_ttl` in `MdnsResolver::new()` (default: 120 seconds)
-- **Query Timeout**: Adjust timeout durations in query methods (default: 1-2 seconds)
+1. **Command-line arguments** (highest priority)
+2. **Environment variables**
+3. **Configuration file** (TOML format)
+4. **Default values** (lowest priority)
+
+### Configuration File
+
+Create a TOML configuration file (see `config.example.toml` for a complete example):
+
+```toml
+[server]
+bind_address = "127.0.0.1"
+port = 5353
+tcp_timeout = 30
+
+[cache]
+ttl_seconds = 120
+enabled = true
+
+[logging]
+level = "info"
+
+[mdns]
+query_timeout_ms = 1000
+discovery_timeout_ms = 2000
+service_types = [
+    "_http._tcp.local.",
+    "_ssh._tcp.local.",
+    "_device-info._tcp.local."
+]
+```
+
+Load the configuration file:
+```bash
+mdns-dns-proxy --config /path/to/config.toml
+# Or via environment variable
+export MDNS_DNS_PROXY_CONFIG=/path/to/config.toml
+mdns-dns-proxy
+```
+
+### Command-Line Arguments
+
+```bash
+# Show all available options
+mdns-dns-proxy --help
+
+# Common usage examples
+mdns-dns-proxy --port 5354 --log-level debug
+mdns-dns-proxy --bind-address 0.0.0.0 --cache-ttl 300
+mdns-dns-proxy --no-cache --query-timeout 2000
+```
+
+### Environment Variables
+
+All configuration options can be set via environment variables:
+
+```bash
+export MDNS_DNS_PROXY_BIND_ADDRESS=0.0.0.0
+export MDNS_DNS_PROXY_PORT=5354
+export MDNS_DNS_PROXY_CACHE_TTL=300
+export MDNS_DNS_PROXY_LOG_LEVEL=debug
+export MDNS_DNS_PROXY_QUERY_TIMEOUT=2000
+export MDNS_DNS_PROXY_NO_CACHE=true
+
+mdns-dns-proxy
+```
+
+### Configuration Options
+
+| Option | CLI Flag | Environment Variable | Config File | Default | Description |
+|--------|----------|---------------------|-------------|---------|-------------|
+| Config file | `--config` | `MDNS_DNS_PROXY_CONFIG` | N/A | None | Path to TOML config file |
+| Bind address | `--bind-address` | `MDNS_DNS_PROXY_BIND_ADDRESS` | `server.bind_address` | 127.0.0.1 | IP address to bind to |
+| Port | `--port` | `MDNS_DNS_PROXY_PORT` | `server.port` | 5353 | Port to bind to |
+| TCP timeout | N/A | N/A | `server.tcp_timeout` | 30 | TCP connection timeout (seconds) |
+| Cache TTL | `--cache-ttl` | `MDNS_DNS_PROXY_CACHE_TTL` | `cache.ttl_seconds` | 120 | Cache TTL in seconds |
+| Disable cache | `--no-cache` | `MDNS_DNS_PROXY_NO_CACHE` | `cache.enabled` | true | Enable/disable caching |
+| Log level | `--log-level` | `MDNS_DNS_PROXY_LOG_LEVEL` | `logging.level` | info | Log level (trace/debug/info/warn/error) |
+| Query timeout | `--query-timeout` | `MDNS_DNS_PROXY_QUERY_TIMEOUT` | `mdns.query_timeout_ms` | 1000 | mDNS query timeout (ms) |
+| Discovery timeout | N/A | N/A | `mdns.discovery_timeout_ms` | 2000 | Service discovery timeout (ms) |
+| Service types | N/A | N/A | `mdns.service_types` | [see config] | Service types to query |
 
 ## Technical Details
 
