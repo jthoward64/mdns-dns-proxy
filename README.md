@@ -1,0 +1,190 @@
+# mDNS-DNS Discovery Proxy
+
+An RFC 8766 compliant DNS-SD Discovery Proxy implementation in Rust that bridges mDNS (Multicast DNS) queries from the local network to standard DNS queries.
+
+## Overview
+
+This project implements a DNS server that resolves `.local` domain names and mDNS service discovery queries using the mDNS-SD protocol. It allows devices that only support standard DNS to discover and access mDNS services on the local network.
+
+## Features
+
+- **RFC 8766 Compliance**: Implements Discovery Proxy for Multicast DNS-Based Service Discovery
+- **Full DNS Record Support**:
+  - A records (IPv4 addresses)
+  - AAAA records (IPv6 addresses)
+  - PTR records (service enumeration)
+  - SRV records (service location)
+  - TXT records (service metadata)
+- **Query Caching**: Results are cached for 120 seconds to improve performance
+- **UDP and TCP Support**: Handles both UDP and TCP DNS queries
+- **Async Runtime**: Built on Tokio for high performance
+
+## Architecture
+
+### Components
+
+1. **MdnsResolver** (`src/mdns_resolver.rs`):
+   - Interfaces with the local mDNS network using `mdns-sd`
+   - Implements query logic for different record types
+   - Manages caching of mDNS query results
+   - Handles service discovery and resolution
+
+2. **MdnsDnsHandler** (`src/dns_handler.rs`):
+   - Implements hickory-server's `RequestHandler` trait
+   - Processes incoming DNS queries
+   - Routes `.local` domain queries to the mDNS resolver
+   - Formats responses according to DNS protocol
+
+3. **Main Server** (`src/main.rs`):
+   - Sets up the DNS server on port 5353
+   - Configures UDP and TCP listeners
+   - Initializes logging and error handling
+
+## Installation
+
+### Prerequisites
+
+- Rust 1.91.1 or higher
+- Cargo
+
+### Build
+
+```bash
+cargo build --release
+```
+
+## Usage
+
+### Running the Server
+
+```bash
+cargo run
+```
+
+The server will bind to `127.0.0.1:5353` by default.
+
+### Querying the Server
+
+Use `dig` or any DNS client to query .local domains:
+
+```bash
+# Query for an A record
+dig @127.0.0.1 -p 5353 hostname.local
+
+# Query for service discovery (PTR record)
+dig @127.0.0.1 -p 5353 _http._tcp.local PTR
+
+# Query for service details (SRV record)
+dig @127.0.0.1 -p 5353 myservice._http._tcp.local SRV
+
+# Query for service metadata (TXT record)
+dig @127.0.0.1 -p 5353 myservice._http._tcp.local TXT
+```
+
+### Integration with System DNS
+
+To make `.local` domains resolvable system-wide, configure your system resolver to forward queries to this proxy:
+
+#### Linux (systemd-resolved)
+
+Edit `/etc/systemd/resolved.conf`:
+```ini
+[Resolve]
+DNS=127.0.0.1:5353
+Domains=~local
+```
+
+Then restart systemd-resolved:
+```bash
+sudo systemctl restart systemd-resolved
+```
+
+#### macOS
+
+Add a resolver configuration:
+```bash
+sudo mkdir -p /etc/resolver
+echo "nameserver 127.0.0.1" | sudo tee /etc/resolver/local
+echo "port 5353" | sudo tee -a /etc/resolver/local
+```
+
+## Configuration
+
+The server can be configured by modifying constants in the source code:
+
+- **Listen Address**: Change `listen_addr` in `src/main.rs` (default: `127.0.0.1:5353`)
+- **Cache TTL**: Modify `cache_ttl` in `MdnsResolver::new()` (default: 120 seconds)
+- **Query Timeout**: Adjust timeout durations in query methods (default: 1-2 seconds)
+
+## Technical Details
+
+### RFC 8766 Implementation
+
+This proxy implements the core requirements of RFC 8766:
+
+- Translates DNS queries for `.local` domains to mDNS queries
+- Maintains compatibility with standard DNS clients
+- Provides service discovery capabilities via DNS-SD
+- Handles multicast responses and converts them to unicast DNS responses
+
+### mDNS Query Process
+
+1. DNS client sends query to proxy
+2. Proxy checks if domain ends with `.local`
+3. Proxy broadcasts mDNS query on local network
+4. mDNS responders reply with their information
+5. Proxy aggregates responses and caches them
+6. Proxy formats responses as standard DNS records
+7. DNS client receives standard DNS response
+
+### Supported Service Types
+
+The resolver automatically queries common service types when resolving hostnames:
+- `_http._tcp.local.` - HTTP services
+- `_ssh._tcp.local.` - SSH services
+- `_device-info._tcp.local.` - Device information services
+
+## Dependencies
+
+- **hickory-server**: DNS server implementation
+- **hickory-proto**: DNS protocol types and utilities
+- **mdns-sd**: mDNS service discovery client
+- **tokio**: Async runtime
+- **tracing**: Structured logging
+- **async-trait**: Async trait support
+
+## Performance Considerations
+
+- Queries are cached for 120 seconds by default
+- mDNS queries have a 1-2 second timeout
+- The server uses async I/O for efficient connection handling
+- Cache automatically cleans up expired entries
+
+## Troubleshooting
+
+### No responses for .local queries
+
+- Ensure mDNS services are running on your network
+- Check that firewall allows mDNS traffic (UDP port 5353)
+- Verify the proxy has network access
+
+### High latency
+
+- mDNS discovery takes 1-2 seconds for first query
+- Subsequent queries use cached results (faster)
+- Consider increasing cache TTL for less dynamic networks
+
+### Permission errors on port 5353
+
+- Use a different port (e.g., 5354) or run with appropriate permissions
+- On Linux: `sudo setcap CAP_NET_BIND_SERVICE=+eip target/release/mdns-dns-proxy`
+
+## License
+
+This project is released under the MIT License.
+
+## References
+
+- [RFC 8766 - Discovery Proxy for Multicast DNS-Based Service Discovery](https://www.rfc-editor.org/rfc/rfc8766.html)
+- [RFC 6763 - DNS-Based Service Discovery](https://www.rfc-editor.org/rfc/rfc6763.html)
+- [RFC 6762 - Multicast DNS](https://www.rfc-editor.org/rfc/rfc6762.html)
