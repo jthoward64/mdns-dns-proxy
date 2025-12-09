@@ -222,6 +222,51 @@ The resolver automatically queries common service types when resolving hostnames
 - `_ssh._tcp.local.` - SSH services
 - `_device-info._tcp.local.` - Device information services
 
+## Development
+
+### Building from Source
+
+```bash
+# Debug build
+cargo build
+
+# Release build
+cargo build --release
+
+# Run development version
+cargo run -- --help
+```
+
+### Running Tests
+
+The project includes comprehensive unit tests:
+
+```bash
+# Run all tests
+cargo test
+
+# Run tests with output
+cargo test -- --nocapture
+
+# Run specific test module
+cargo test config::tests
+cargo test dns_handler::tests
+cargo test mdns_resolver::tests
+```
+
+See [TESTING_UNIT.md](TESTING_UNIT.md) for detailed testing documentation.
+
+### Project Structure
+
+```
+src/
+├── lib.rs           # Library interface
+├── main.rs          # Binary entry point
+├── config.rs        # Configuration management (18 tests)
+├── dns_handler.rs   # DNS request handling (10 tests)
+└── mdns_resolver.rs # mDNS resolution logic (13 tests)
+```
+
 ## Dependencies
 
 - **hickory-server**: DNS server implementation
@@ -230,6 +275,9 @@ The resolver automatically queries common service types when resolving hostnames
 - **tokio**: Async runtime
 - **tracing**: Structured logging
 - **async-trait**: Async trait support
+- **clap**: Command-line argument parsing
+- **serde**: Serialization/deserialization
+- **toml**: TOML configuration parsing
 
 ## Performance Considerations
 

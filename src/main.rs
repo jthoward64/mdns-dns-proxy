@@ -1,10 +1,4 @@
-mod config;
-mod dns_handler;
-mod mdns_resolver;
-
-use crate::config::{Args, Config};
-use crate::dns_handler::MdnsDnsHandler;
-use crate::mdns_resolver::MdnsResolver;
+use mdns_dns_proxy::{Args, Config, MdnsDnsHandler, MdnsResolver};
 use clap::Parser;
 use hickory_server::ServerFuture;
 use std::net::SocketAddr;

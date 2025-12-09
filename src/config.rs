@@ -270,6 +270,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
     
     #[test]
     fn test_default_config() {
@@ -298,5 +299,352 @@ mod tests {
         assert_eq!(config.server.port, 5354);
         assert_eq!(config.cache.ttl_seconds, 300);
         assert_eq!(config.logging.level, "debug");
+    }
+
+    #[test]
+    fn test_default_server_config() {
+        let server = ServerConfig::default();
+        assert_eq!(server.bind_address, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+        assert_eq!(server.port, 5353);
+        assert_eq!(server.tcp_timeout, 30);
+    }
+
+    #[test]
+    fn test_default_cache_config() {
+        let cache = CacheConfig::default();
+        assert_eq!(cache.ttl_seconds, 120);
+        assert!(cache.enabled);
+    }
+
+    #[test]
+    fn test_default_logging_config() {
+        let logging = LoggingConfig::default();
+        assert_eq!(logging.level, "info");
+    }
+
+    #[test]
+    fn test_default_mdns_config() {
+        let mdns = MdnsConfig::default();
+        assert_eq!(mdns.query_timeout_ms, 1000);
+        assert_eq!(mdns.discovery_timeout_ms, 2000);
+        assert_eq!(mdns.service_types.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_log_level_valid() {
+        let mut config = Config::default();
+        
+        config.logging.level = "trace".to_string();
+        assert_eq!(config.parse_log_level(), Level::TRACE);
+        
+        config.logging.level = "debug".to_string();
+        assert_eq!(config.parse_log_level(), Level::DEBUG);
+        
+        config.logging.level = "info".to_string();
+        assert_eq!(config.parse_log_level(), Level::INFO);
+        
+        config.logging.level = "warn".to_string();
+        assert_eq!(config.parse_log_level(), Level::WARN);
+        
+        config.logging.level = "error".to_string();
+        assert_eq!(config.parse_log_level(), Level::ERROR);
+    }
+
+    #[test]
+    fn test_parse_log_level_case_insensitive() {
+        let mut config = Config::default();
+        
+        config.logging.level = "DEBUG".to_string();
+        assert_eq!(config.parse_log_level(), Level::DEBUG);
+        
+        config.logging.level = "Info".to_string();
+        assert_eq!(config.parse_log_level(), Level::INFO);
+        
+        config.logging.level = "WARN".to_string();
+        assert_eq!(config.parse_log_level(), Level::WARN);
+    }
+
+    #[test]
+    fn test_parse_log_level_invalid_defaults_to_info() {
+        let mut config = Config::default();
+        
+        config.logging.level = "invalid".to_string();
+        assert_eq!(config.parse_log_level(), Level::INFO);
+        
+        config.logging.level = "".to_string();
+        assert_eq!(config.parse_log_level(), Level::INFO);
+    }
+
+    #[test]
+    fn test_cache_ttl_conversion() {
+        let mut config = Config::default();
+        
+        config.cache.ttl_seconds = 60;
+        assert_eq!(config.cache_ttl(), Duration::from_secs(60));
+        
+        config.cache.ttl_seconds = 300;
+        assert_eq!(config.cache_ttl(), Duration::from_secs(300));
+    }
+
+    #[test]
+    fn test_query_timeout_conversion() {
+        let mut config = Config::default();
+        
+        config.mdns.query_timeout_ms = 500;
+        assert_eq!(config.query_timeout(), Duration::from_millis(500));
+        
+        config.mdns.query_timeout_ms = 2000;
+        assert_eq!(config.query_timeout(), Duration::from_millis(2000));
+    }
+
+    #[test]
+    fn test_discovery_timeout_conversion() {
+        let mut config = Config::default();
+        
+        config.mdns.discovery_timeout_ms = 1000;
+        assert_eq!(config.discovery_timeout(), Duration::from_millis(1000));
+        
+        config.mdns.discovery_timeout_ms = 5000;
+        assert_eq!(config.discovery_timeout(), Duration::from_millis(5000));
+    }
+
+    #[test]
+    fn test_toml_partial_config() {
+        let toml_str = r#"
+            [server]
+            port = 5354
+        "#;
+        
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.server.port, 5354);
+        // Other values should be defaults
+        assert_eq!(config.server.bind_address, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+        assert_eq!(config.cache.ttl_seconds, 120);
+    }
+
+    #[test]
+    fn test_toml_full_config() {
+        let toml_str = r#"
+            [server]
+            bind_address = "0.0.0.0"
+            port = 5354
+            tcp_timeout = 60
+            
+            [cache]
+            ttl_seconds = 300
+            enabled = false
+            
+            [logging]
+            level = "trace"
+            
+            [mdns]
+            query_timeout_ms = 1500
+            discovery_timeout_ms = 3000
+            service_types = ["_http._tcp.local.", "_ssh._tcp.local."]
+        "#;
+        
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.server.bind_address, IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)));
+        assert_eq!(config.server.port, 5354);
+        assert_eq!(config.server.tcp_timeout, 60);
+        assert_eq!(config.cache.ttl_seconds, 300);
+        assert!(!config.cache.enabled);
+        assert_eq!(config.logging.level, "trace");
+        assert_eq!(config.mdns.query_timeout_ms, 1500);
+        assert_eq!(config.mdns.discovery_timeout_ms, 3000);
+        assert_eq!(config.mdns.service_types.len(), 2);
+    }
+
+    #[test]
+    fn test_toml_ipv6_address() {
+        let toml_str = r#"
+            [server]
+            bind_address = "::"
+            port = 5353
+        "#;
+        
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert!(matches!(config.server.bind_address, IpAddr::V6(_)));
+    }
+
+    #[test]
+    fn test_config_serialization() {
+        let config = Config::default();
+        let toml_str = toml::to_string(&config).unwrap();
+        
+        // Should be valid TOML
+        let parsed: Config = toml::from_str(&toml_str).unwrap();
+        assert_eq!(parsed.server.port, config.server.port);
+        assert_eq!(parsed.cache.ttl_seconds, config.cache.ttl_seconds);
+    }
+
+    #[test]
+    fn test_config_clone() {
+        let config = Config::default();
+        let cloned = config.clone();
+        
+        assert_eq!(config.server.port, cloned.server.port);
+        assert_eq!(config.cache.ttl_seconds, cloned.cache.ttl_seconds);
+    }
+
+    #[test]
+    fn test_service_types_customization() {
+        let toml_str = r#"
+            [mdns]
+            service_types = [
+                "_http._tcp.local.",
+                "_https._tcp.local.",
+                "_smb._tcp.local.",
+                "_printer._tcp.local.",
+            ]
+        "#;
+        
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.mdns.service_types.len(), 4);
+        assert!(config.mdns.service_types.contains(&"_smb._tcp.local.".to_string()));
+    }
+
+    #[test]
+    fn test_config_load_with_defaults() {
+        use std::net::Ipv4Addr;
+        
+        let args = Args {
+            config: None,
+            bind_address: None,
+            port: None,
+            cache_ttl: None,
+            no_cache: false,
+            log_level: None,
+            query_timeout: None,
+        };
+        
+        let config = Config::load(args).unwrap();
+        assert_eq!(config.server.bind_address, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+        assert_eq!(config.server.port, 5353);
+        assert_eq!(config.cache.ttl_seconds, 120);
+        assert!(config.cache.enabled);
+    }
+
+    #[test]
+    fn test_config_load_with_cli_overrides() {
+        use std::net::Ipv4Addr;
+        
+        let args = Args {
+            config: None,
+            bind_address: Some(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))),
+            port: Some(5354),
+            cache_ttl: Some(300),
+            no_cache: true,
+            log_level: Some("debug".to_string()),
+            query_timeout: Some(2000),
+        };
+        
+        let config = Config::load(args).unwrap();
+        assert_eq!(config.server.bind_address, IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)));
+        assert_eq!(config.server.port, 5354);
+        assert_eq!(config.cache.ttl_seconds, 300);
+        assert!(!config.cache.enabled);
+        assert_eq!(config.logging.level, "debug");
+        assert_eq!(config.mdns.query_timeout_ms, 2000);
+    }
+
+    #[test]
+    fn test_config_load_from_file() {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+        
+        let toml_content = r#"
+            [server]
+            bind_address = "0.0.0.0"
+            port = 5355
+            
+            [cache]
+            ttl_seconds = 180
+        "#;
+        
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(toml_content.as_bytes()).unwrap();
+        let path = temp_file.path().to_path_buf();
+        
+        let args = Args {
+            config: Some(path),
+            bind_address: None,
+            port: None,
+            cache_ttl: None,
+            no_cache: false,
+            log_level: None,
+            query_timeout: None,
+        };
+        
+        let config = Config::load(args).unwrap();
+        assert_eq!(config.server.port, 5355);
+        assert_eq!(config.cache.ttl_seconds, 180);
+    }
+
+    #[test]
+    fn test_config_load_file_with_cli_override() {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+        
+        let toml_content = r#"
+            [server]
+            port = 5355
+        "#;
+        
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(toml_content.as_bytes()).unwrap();
+        let path = temp_file.path().to_path_buf();
+        
+        let args = Args {
+            config: Some(path),
+            bind_address: None,
+            port: Some(5356), // CLI override
+            cache_ttl: None,
+            no_cache: false,
+            log_level: None,
+            query_timeout: None,
+        };
+        
+        let config = Config::load(args).unwrap();
+        // CLI override should win
+        assert_eq!(config.server.port, 5356);
+    }
+
+    #[test]
+    fn test_config_load_invalid_file() {
+        use std::path::PathBuf;
+        
+        let args = Args {
+            config: Some(PathBuf::from("/nonexistent/file.toml")),
+            bind_address: None,
+            port: None,
+            cache_ttl: None,
+            no_cache: false,
+            log_level: None,
+            query_timeout: None,
+        };
+        
+        let result = Config::load(args);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_config_load_partial_cli_overrides() {
+        let args = Args {
+            config: None,
+            bind_address: None,
+            port: Some(5354),
+            cache_ttl: None,
+            no_cache: false,
+            log_level: Some("trace".to_string()),
+            query_timeout: None,
+        };
+        
+        let config = Config::load(args).unwrap();
+        assert_eq!(config.server.port, 5354);
+        assert_eq!(config.logging.level, "trace");
+        // Other values should be defaults
+        assert_eq!(config.cache.ttl_seconds, 120);
+        assert!(config.cache.enabled);
     }
 }
