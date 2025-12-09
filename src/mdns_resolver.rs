@@ -164,40 +164,54 @@ impl MdnsResolver {
         debug!("Resolving SRV for: {}", service_name);
         
         // Extract service type from full name
-        // Format: instance._service._tcp.local
+        // Format: instance._service._tcp.local.
+        // We need to get _service._tcp.local. from instance._service._tcp.local.
         let parts: Vec<&str> = service_name.split('.').collect();
-        if parts.len() < 3 {
+        if parts.len() < 4 {
             return Ok(Vec::new());
         }
         
-        let service_type = format!("{}.{}.local.", parts[parts.len() - 3], parts[parts.len() - 2]);
+        // Skip instance name (first part) and reconstruct service type
+        let service_type = parts[1..].join(".");
         
         let receiver = self.daemon.browse(&service_type)?;
         let mut records = Vec::new();
         
         let timeout_duration = Duration::from_secs(2);
+        let start = std::time::Instant::now();
         
-        match timeout(timeout_duration, receiver.recv_async()).await {
-            Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
-                if info.get_fullname() == service_name {
-                    let srv_name = Name::from_utf8(&service_name)?;
-                    let target = Name::from_utf8(info.get_hostname())?;
-                    
-                    let record = Record::from_rdata(
-                        srv_name,
-                        120,
-                        RData::SRV(hickory_proto::rr::rdata::SRV::new(
-                            0,                    // priority
-                            0,                    // weight
-                            info.get_port(),      // port
-                            target,               // target hostname
-                        )),
-                    );
-                    
-                    records.push(record);
-                }
+        // Loop through events until we find our service or timeout
+        loop {
+            if start.elapsed() > timeout_duration {
+                break;
             }
-            _ => {}
+            
+            match timeout(Duration::from_millis(500), receiver.recv_async()).await {
+                Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
+                    if info.get_fullname() == service_name {
+                        let srv_name = Name::from_utf8(&service_name)?;
+                        let target = Name::from_utf8(info.get_hostname())?;
+                        
+                        let record = Record::from_rdata(
+                            srv_name,
+                            120,
+                            RData::SRV(hickory_proto::rr::rdata::SRV::new(
+                                0,                    // priority
+                                0,                    // weight
+                                info.get_port(),      // port
+                                target,               // target hostname
+                            )),
+                        );
+                        
+                        records.push(record);
+                        break;
+                    }
+                }
+                Ok(Ok(ServiceEvent::SearchStopped(_))) => break,
+                Ok(Err(_)) => break,
+                Err(_) => continue, // Timeout, try again
+                _ => {}
+            }
         }
         
         Ok(records)
@@ -209,41 +223,56 @@ impl MdnsResolver {
         
         debug!("Resolving TXT for: {}", service_name);
         
+        // Extract service type from full name
+        // Format: instance._service._tcp.local.
         let parts: Vec<&str> = service_name.split('.').collect();
-        if parts.len() < 3 {
+        if parts.len() < 4 {
             return Ok(Vec::new());
         }
         
-        let service_type = format!("{}.{}.local.", parts[parts.len() - 3], parts[parts.len() - 2]);
+        // Skip instance name (first part) and reconstruct service type
+        let service_type = parts[1..].join(".");
         
         let receiver = self.daemon.browse(&service_type)?;
         let mut records = Vec::new();
         
         let timeout_duration = Duration::from_secs(2);
+        let start = std::time::Instant::now();
         
-        match timeout(timeout_duration, receiver.recv_async()).await {
-            Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
-                if info.get_fullname() == service_name {
-                    let txt_name = Name::from_utf8(&service_name)?;
-                    
-                    let txt_records: Vec<String> = info
-                        .get_properties()
-                        .iter()
-                        .map(|prop| format!("{}={}", prop.key(), prop.val_str()))
-                        .collect();
-                    
-                    if !txt_records.is_empty() {
-                        let record = Record::from_rdata(
-                            txt_name,
-                            120,
-                            RData::TXT(hickory_proto::rr::rdata::TXT::new(txt_records)),
-                        );
+        // Loop through events until we find our service or timeout
+        loop {
+            if start.elapsed() > timeout_duration {
+                break;
+            }
+            
+            match timeout(Duration::from_millis(500), receiver.recv_async()).await {
+                Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
+                    if info.get_fullname() == service_name {
+                        let txt_name = Name::from_utf8(&service_name)?;
                         
-                        records.push(record);
+                        let txt_records: Vec<String> = info
+                            .get_properties()
+                            .iter()
+                            .map(|prop| format!("{}={}", prop.key(), prop.val_str()))
+                            .collect();
+                        
+                        if !txt_records.is_empty() {
+                            let record = Record::from_rdata(
+                                txt_name,
+                                120,
+                                RData::TXT(hickory_proto::rr::rdata::TXT::new(txt_records)),
+                            );
+                            
+                            records.push(record);
+                        }
+                        break;
                     }
                 }
+                Ok(Ok(ServiceEvent::SearchStopped(_))) => break,
+                Ok(Err(_)) => break,
+                Err(_) => continue, // Timeout, try again
+                _ => {}
             }
-            _ => {}
         }
         
         Ok(records)

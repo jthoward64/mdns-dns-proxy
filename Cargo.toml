@@ -17,3 +17,4 @@ tracing-subscriber = "0.3.22"
 
 [dev-dependencies]
 tempfile = "3.23.0"
+serial_test = "3.1.1"
