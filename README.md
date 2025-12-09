@@ -36,7 +36,7 @@ This project implements a DNS server that resolves `.local` domain names and mDN
    - Formats responses according to DNS protocol
 
 3. **Main Server** (`src/main.rs`):
-   - Sets up the DNS server on port 5353
+   - Sets up the DNS server on port 5335
    - Configures UDP and TCP listeners
    - Initializes logging and error handling
 
@@ -61,7 +61,7 @@ cargo build --release
 cargo run
 ```
 
-The server will bind to `127.0.0.1:5353` by default.
+The server will bind to `127.0.0.1:5335` by default.
 
 ### Querying the Server
 
@@ -69,16 +69,16 @@ Use `dig` or any DNS client to query .local domains:
 
 ```bash
 # Query for an A record
-dig @127.0.0.1 -p 5353 hostname.local
+dig @127.0.0.1 -p 5335 hostname.local
 
 # Query for service discovery (PTR record)
-dig @127.0.0.1 -p 5353 _http._tcp.local PTR
+dig @127.0.0.1 -p 5335 _http._tcp.local PTR
 
 # Query for service details (SRV record)
-dig @127.0.0.1 -p 5353 myservice._http._tcp.local SRV
+dig @127.0.0.1 -p 5335 myservice._http._tcp.local SRV
 
 # Query for service metadata (TXT record)
-dig @127.0.0.1 -p 5353 myservice._http._tcp.local TXT
+dig @127.0.0.1 -p 5335 myservice._http._tcp.local TXT
 ```
 
 ### Integration with System DNS
@@ -90,7 +90,7 @@ To make `.local` domains resolvable system-wide, configure your system resolver 
 Edit `/etc/systemd/resolved.conf`:
 ```ini
 [Resolve]
-DNS=127.0.0.1:5353
+DNS=127.0.0.1:5335
 Domains=~local
 ```
 
@@ -105,7 +105,7 @@ Add a resolver configuration:
 ```bash
 sudo mkdir -p /etc/resolver
 echo "nameserver 127.0.0.1" | sudo tee /etc/resolver/local
-echo "port 5353" | sudo tee -a /etc/resolver/local
+echo "port 5335" | sudo tee -a /etc/resolver/local
 ```
 
 ## Configuration
@@ -124,7 +124,7 @@ Create a TOML configuration file (see `config.example.toml` for a complete examp
 ```toml
 [server]
 bind_address = "127.0.0.1"
-port = 5353
+port = 5335
 tcp_timeout = 30
 
 [cache]
@@ -185,7 +185,7 @@ mdns-dns-proxy
 |--------|----------|---------------------|-------------|---------|-------------|
 | Config file | `--config` | `MDNS_DNS_PROXY_CONFIG` | N/A | None | Path to TOML config file |
 | Bind address | `--bind-address` | `MDNS_DNS_PROXY_BIND_ADDRESS` | `server.bind_address` | 127.0.0.1 | IP address to bind to |
-| Port | `--port` | `MDNS_DNS_PROXY_PORT` | `server.port` | 5353 | Port to bind to |
+| Port | `--port` | `MDNS_DNS_PROXY_PORT` | `server.port` | 5335 | Port to bind to |
 | TCP timeout | N/A | N/A | `server.tcp_timeout` | 30 | TCP connection timeout (seconds) |
 | Cache TTL | `--cache-ttl` | `MDNS_DNS_PROXY_CACHE_TTL` | `cache.ttl_seconds` | 120 | Cache TTL in seconds |
 | Disable cache | `--no-cache` | `MDNS_DNS_PROXY_NO_CACHE` | `cache.enabled` | true | Enable/disable caching |
@@ -291,7 +291,7 @@ src/
 ### No responses for .local queries
 
 - Ensure mDNS services are running on your network
-- Check that firewall allows mDNS traffic (UDP port 5353)
+- Check that firewall allows mDNS traffic (UDP port 5335)
 - Verify the proxy has network access
 
 ### High latency
@@ -300,7 +300,7 @@ src/
 - Subsequent queries use cached results (faster)
 - Consider increasing cache TTL for less dynamic networks
 
-### Permission errors on port 5353
+### Permission errors on port 5335
 
 - Use a different port (e.g., 5354) or run with appropriate permissions
 - On Linux: `sudo setcap CAP_NET_BIND_SERVICE=+eip target/release/mdns-dns-proxy`

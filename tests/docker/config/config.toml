@@ -1,0 +1,7 @@
+[server]
+bind_address = "172.20.0.5"
+port = 5335
+
+[mdns]
+query_timeout_ms = 500
+discovery_timeout_ms = 500

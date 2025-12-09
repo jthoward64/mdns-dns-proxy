@@ -1,0 +1,125 @@
+services:
+  # mDNS advertiser 1 - Simple hostname
+  mdns-host1:
+    image: alpine:latest
+    hostname: test-host1
+    container_name: mdns-host1
+    networks:
+      mdns-net:
+        ipv4_address: 172.20.0.10
+    command: >
+      sh -c "
+        apk add --no-cache avahi avahi-tools dbus &&
+        mkdir -p /var/run/dbus &&
+        dbus-daemon --system &&
+        avahi-daemon --daemonize &&
+        sleep 2 &&
+        avahi-publish -a test-host1.local 172.20.0.10 &
+        tail -f /dev/null
+      "
+
+  # mDNS advertiser 2 - HTTP service
+  mdns-http-service:
+    image: alpine:latest
+    hostname: web-server
+    container_name: mdns-http-service
+    networks:
+      mdns-net:
+        ipv4_address: 172.20.0.11
+    command: >
+      sh -c "
+        apk add --no-cache avahi avahi-tools dbus &&
+        mkdir -p /var/run/dbus &&
+        dbus-daemon --system &&
+        avahi-daemon --daemonize &&
+        sleep 2 &&
+        avahi-publish -s WebServer _http._tcp 80 &
+        avahi-publish -a web-server.local 172.20.0.11 &
+        tail -f /dev/null
+      "
+
+  # mDNS advertiser 3 - SSH service
+  mdns-ssh-service:
+    image: alpine:latest
+    hostname: ssh-server
+    container_name: mdns-ssh-service
+    networks:
+      mdns-net:
+        ipv4_address: 172.20.0.12
+    command: >
+      sh -c "
+        apk add --no-cache avahi avahi-tools dbus &&
+        mkdir -p /var/run/dbus &&
+        dbus-daemon --system &&
+        avahi-daemon --daemonize &&
+        sleep 2 &&
+        avahi-publish -s SSHServer _ssh._tcp 22 &
+        avahi-publish -a ssh-server.local 172.20.0.12 &
+        tail -f /dev/null
+      "
+
+  # mDNS advertiser 4 - Multiple services
+  mdns-multi-service:
+    image: alpine:latest
+    hostname: multi-server
+    container_name: mdns-multi-service
+    networks:
+      mdns-net:
+        ipv4_address: 172.20.0.13
+    command: >
+      sh -c "
+        apk add --no-cache avahi avahi-tools dbus &&
+        mkdir -p /var/run/dbus &&
+        dbus-daemon --system &&
+        avahi-daemon --daemonize &&
+        sleep 2 &&
+        avahi-publish -a multi-server.local 172.20.0.13 &
+        avahi-publish -s MultiHTTP _http._tcp 8080 &
+        avahi-publish -s MultiFTP _ftp._tcp 21 &
+        tail -f /dev/null
+      "
+
+  # mDNS-DNS Proxy
+  mdns-dns-proxy:
+    build:
+      context: ../..
+      dockerfile: tests/docker/Dockerfile.test
+    container_name: mdns-dns-proxy
+    networks:
+      mdns-net:
+        ipv4_address: 172.20.0.5
+    environment:
+      - RUST_LOG=debug
+    volumes:
+      - ./config/:/etc/mdns-dns-proxy/:ro
+    depends_on:
+      - mdns-host1
+      - mdns-http-service
+      - mdns-ssh-service
+      - mdns-multi-service
+    command: ["--config", "/etc/mdns-dns-proxy/config.toml"]
+
+  # Test runner
+  test-runner:
+    image: node:latest
+    container_name: test-runner
+    networks:
+      mdns-net:
+        ipv4_address: 172.20.0.100
+    depends_on:
+      - mdns-dns-proxy
+    volumes:
+      - ./mdns-dns-proxy-test-runner:/test-runner
+    command: >
+      sh -c "
+        cd /test-runner &&
+        npm install &&
+        npm test
+      "
+
+networks:
+  mdns-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

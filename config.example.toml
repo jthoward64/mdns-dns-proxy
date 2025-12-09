@@ -10,9 +10,9 @@
 bind_address = "127.0.0.1"
 
 # Port to bind the DNS server to
-# Default: 5353
+# Default: 5335
 # Note: Ports below 1024 require root/admin privileges
-port = 5353
+port = 5335
 
 # TCP connection timeout in seconds
 # Default: 30

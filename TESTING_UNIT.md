@@ -293,8 +293,8 @@ docker run mdns-proxy-test
 
 If integration tests fail due to port conflicts:
 ```bash
-# Check for processes using port 5353
-sudo lsof -i :5353
+# Check for processes using port 5335
+sudo lsof -i :5335
 # Kill the process or use a different port
 ```
 

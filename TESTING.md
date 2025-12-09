@@ -24,14 +24,14 @@ Expected output:
 ```
 2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: Starting mDNS-DNS Discovery Proxy (RFC 8766)
 2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: mDNS resolver initialized
-2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: Binding DNS server to 127.0.0.1:5353
-2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: UDP socket bound to 127.0.0.1:5353
-2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: TCP listener bound to 127.0.0.1:5353
+2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: Binding DNS server to 127.0.0.1:5335
+2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: UDP socket bound to 127.0.0.1:5335
+2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: TCP listener bound to 127.0.0.1:5335
 2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: Registered UDP socket
 2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: Registered TCP listener
 2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: mDNS-DNS proxy server is running!
-2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: Query .local domains via this DNS server at 127.0.0.1:5353
-2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: Example: dig @127.0.0.1 -p 5353 hostname.local
+2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: Query .local domains via this DNS server at 127.0.0.1:5335
+2025-12-08T00:00:00.000000Z  INFO mdns_dns_proxy: Example: dig @127.0.0.1 -p 5335 hostname.local
 ```
 
 ## Test Cases
@@ -40,7 +40,7 @@ Expected output:
 
 ```bash
 # Browse for all HTTP services on the network
-dig @127.0.0.1 -p 5353 _http._tcp.local PTR
+dig @127.0.0.1 -p 5335 _http._tcp.local PTR
 
 # Expected output:
 # ;; ANSWER SECTION:
@@ -51,7 +51,7 @@ dig @127.0.0.1 -p 5353 _http._tcp.local PTR
 
 ```bash
 # Get SRV record for a specific service
-dig @127.0.0.1 -p 5353 MyServer._http._tcp.local SRV
+dig @127.0.0.1 -p 5335 MyServer._http._tcp.local SRV
 
 # Expected output:
 # ;; ANSWER SECTION:
@@ -62,7 +62,7 @@ dig @127.0.0.1 -p 5353 MyServer._http._tcp.local SRV
 
 ```bash
 # Query TXT records for service information
-dig @127.0.0.1 -p 5353 MyServer._http._tcp.local TXT
+dig @127.0.0.1 -p 5335 MyServer._http._tcp.local TXT
 
 # Expected output:
 # ;; ANSWER SECTION:
@@ -73,14 +73,14 @@ dig @127.0.0.1 -p 5353 MyServer._http._tcp.local TXT
 
 ```bash
 # Query A record for IPv4 address
-dig @127.0.0.1 -p 5353 myserver.local A
+dig @127.0.0.1 -p 5335 myserver.local A
 
 # Expected output:
 # ;; ANSWER SECTION:
 # myserver.local.         120     IN      A       192.168.1.100
 
 # Query AAAA record for IPv6 address
-dig @127.0.0.1 -p 5353 myserver.local AAAA
+dig @127.0.0.1 -p 5335 myserver.local AAAA
 
 # Expected output:
 # ;; ANSWER SECTION:
@@ -91,7 +91,7 @@ dig @127.0.0.1 -p 5353 myserver.local AAAA
 
 ```bash
 # Query using nslookup
-nslookup -port=5353 myserver.local 127.0.0.1
+nslookup -port=5335 myserver.local 127.0.0.1
 ```
 
 ### 6. Test with curl (if hostname resolves)
@@ -107,19 +107,19 @@ curl http://myserver.local:8080/
 
 ```bash
 # SSH services
-dig @127.0.0.1 -p 5353 _ssh._tcp.local PTR
+dig @127.0.0.1 -p 5335 _ssh._tcp.local PTR
 
 # Printers
-dig @127.0.0.1 -p 5353 _ipp._tcp.local PTR
+dig @127.0.0.1 -p 5335 _ipp._tcp.local PTR
 
 # AirPlay devices
-dig @127.0.0.1 -p 5353 _airplay._tcp.local PTR
+dig @127.0.0.1 -p 5335 _airplay._tcp.local PTR
 
 # HomeKit devices
-dig @127.0.0.1 -p 5353 _hap._tcp.local PTR
+dig @127.0.0.1 -p 5335 _hap._tcp.local PTR
 
 # Chromecast devices
-dig @127.0.0.1 -p 5353 _googlecast._tcp.local PTR
+dig @127.0.0.1 -p 5335 _googlecast._tcp.local PTR
 ```
 
 ## Debugging
@@ -153,7 +153,7 @@ dns-sd -B _http._tcp local
 
 ```bash
 # Capture mDNS traffic
-sudo tcpdump -i any port 5353
+sudo tcpdump -i any port 5335
 
 # Or use Wireshark with filter: mdns
 ```
@@ -164,10 +164,10 @@ sudo tcpdump -i any port 5353
 
 ```bash
 # First query (uncached) - expect 1-2 seconds
-time dig @127.0.0.1 -p 5353 myserver.local +short
+time dig @127.0.0.1 -p 5335 myserver.local +short
 
 # Second query (cached) - expect < 100ms
-time dig @127.0.0.1 -p 5353 myserver.local +short
+time dig @127.0.0.1 -p 5335 myserver.local +short
 ```
 
 ### Test Concurrent Queries
@@ -175,7 +175,7 @@ time dig @127.0.0.1 -p 5353 myserver.local +short
 ```bash
 # Send 100 concurrent queries
 for i in {1..100}; do
-  dig @127.0.0.1 -p 5353 myserver.local +short &
+  dig @127.0.0.1 -p 5335 myserver.local +short &
 done
 wait
 ```
@@ -185,13 +185,13 @@ wait
 ### "No answer" or NXDOMAIN
 
 - Verify mDNS services are running: `avahi-browse -a` or `dns-sd -B _http._tcp`
-- Check firewall allows mDNS multicast (224.0.0.251:5353)
+- Check firewall allows mDNS multicast (224.0.0.251:5335)
 - Ensure the proxy has network interface access
 
 ### Connection Refused
 
 - Check the server is running
-- Verify port 5353 is not already in use: `lsof -i :5353`
+- Verify port 5335 is not already in use: `lsof -i :5335`
 - Try a different port if needed
 
 ### Slow Responses
@@ -227,5 +227,5 @@ zeroconf.close()
 Then query it:
 ```bash
 python3 test_service.py &
-dig @127.0.0.1 -p 5353 TestService._http._tcp.local SRV
+dig @127.0.0.1 -p 5335 TestService._http._tcp.local SRV
 ```

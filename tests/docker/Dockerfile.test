@@ -1,0 +1,43 @@
+# Build stage
+FROM rust:1-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache musl-dev
+
+WORKDIR /app
+
+# Copy manifests
+COPY Cargo.toml Cargo.lock ./
+
+# Copy source code
+COPY src ./src
+
+# Build release binary
+RUN cargo build --release
+
+# Runtime stage
+FROM alpine:latest
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    avahi \
+    avahi-tools \
+    dbus \
+    libgcc
+
+# Create necessary directories
+RUN mkdir -p /var/run/dbus /etc/mdns-dns-proxy
+
+# Copy the binary from builder
+COPY --from=builder /app/target/release/mdns-dns-proxy /usr/local/bin/
+
+# Create entrypoint script
+RUN printf '#!/bin/sh\n\
+dbus-daemon --system\n\
+avahi-daemon --daemonize\n\
+sleep 1\n\
+avahi-browse -a -t \n\
+exec /usr/local/bin/mdns-dns-proxy "$@"\n' > /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

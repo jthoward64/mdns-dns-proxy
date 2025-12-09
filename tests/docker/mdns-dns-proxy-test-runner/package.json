@@ -1,0 +1,13 @@
+{
+  "name": "mdns-dns-proxy-test-runner",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@types/node": "^24.10.2",
+    "mdns-listener-advanced": "^3.4.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  }
+}

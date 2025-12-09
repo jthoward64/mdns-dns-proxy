@@ -78,7 +78,7 @@ fn default_bind_address() -> IpAddr {
 }
 
 fn default_port() -> u16 {
-    5353
+    5335
 }
 
 fn default_tcp_timeout() -> u64 {
@@ -213,9 +213,9 @@ impl Config {
 bind_address = "127.0.0.1"
 
 # Port to bind the DNS server to
-# Default: 5353
+# Default: 5335
 # Note: Ports below 1024 require root/admin privileges
-port = 5353
+port = 5335
 
 # TCP connection timeout in seconds
 # Default: 30
@@ -339,7 +339,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = Config::default();
-        assert_eq!(config.server.port, 5353);
+        assert_eq!(config.server.port, 5335);
         assert_eq!(config.cache.ttl_seconds, 120);
         assert!(config.cache.enabled);
     }
@@ -369,7 +369,7 @@ mod tests {
     fn test_default_server_config() {
         let server = ServerConfig::default();
         assert_eq!(server.bind_address, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
-        assert_eq!(server.port, 5353);
+        assert_eq!(server.port, 5335);
         assert_eq!(server.tcp_timeout, 30);
     }
 
@@ -524,7 +524,7 @@ mod tests {
         let toml_str = r#"
             [server]
             bind_address = "::"
-            port = 5353
+            port = 5335
         "#;
         
         let config: Config = toml::from_str(toml_str).unwrap();
@@ -585,7 +585,7 @@ mod tests {
         
         let config = Config::load(args).unwrap();
         assert_eq!(config.server.bind_address, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
-        assert_eq!(config.server.port, 5353);
+        assert_eq!(config.server.port, 5335);
         assert_eq!(config.cache.ttl_seconds, 120);
         assert!(config.cache.enabled);
     }

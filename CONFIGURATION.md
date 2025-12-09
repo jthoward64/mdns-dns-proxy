@@ -102,12 +102,12 @@ mdns-dns-proxy --log-level trace
 - **CLI Flag**: `--port`, `-p`
 - **Environment**: `MDNS_DNS_PROXY_PORT`
 - **Config File**: `server.port`
-- **Default**: `5353`
+- **Default**: `5335`
 - **Note**: Ports below 1024 require root/admin privileges
 - **Examples**:
-  - `5353` - Standard mDNS port (requires privileges)
+  - `5335` - Standard mDNS port (requires privileges)
   - `5354` - Alternative port
-  - `53533` - High port number
+  - `53353` - High port number
 
 #### TCP Timeout
 - **Description**: TCP connection timeout in seconds
@@ -199,7 +199,7 @@ These options are only available in the configuration file.
 # Listen on all interfaces (0.0.0.0 for IPv4, :: for IPv6)
 bind_address = "0.0.0.0"
 
-# Use alternative port (standard 5353 requires root)
+# Use alternative port (standard 5335 requires root)
 port = 5354
 
 # TCP connection timeout
@@ -309,7 +309,7 @@ RUN cargo build --release
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/mdns-dns-proxy /usr/local/bin/
-EXPOSE 5353/udp 5353/tcp
+EXPOSE 5335/udp 5335/tcp
 CMD ["mdns-dns-proxy"]
 ```
 
@@ -328,12 +328,12 @@ docker run -d \
 
 ### "Address already in use" Error
 
-Port 5353 is likely in use. Solutions:
+Port 5335 is likely in use. Solutions:
 - Use a different port: `--port 5354`
 - Stop other services using the port
-- On Linux: `sudo lsof -i :5353` to find the process
+- On Linux: `sudo lsof -i :5335` to find the process
 
-### "Permission denied" on Port 5353
+### "Permission denied" on Port 5335
 
 Ports below 1024 require elevated privileges:
 - Use a higher port number (recommended)
@@ -382,7 +382,7 @@ discovery_timeout_ms = 5000
 ```toml
 [server]
 bind_address = "0.0.0.0"
-port = 5353
+port = 5335
 tcp_timeout = 30
 
 [cache]
