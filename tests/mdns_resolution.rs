@@ -136,3 +136,58 @@ fn contains_ipv4(records: &[Record], expected: Ipv4Addr) -> bool {
         }
     })
 }
+
+fn contains_ipv6(records: &[Record], expected: std::net::Ipv6Addr) -> bool {
+    records.iter().any(|record| {
+        if let RData::AAAA(addr) = record.data() {
+            addr.0 == expected
+        } else {
+            false
+        }
+    })
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn resolves_ipv6_mdns_hostname() {
+    let service = TestMdnsService::advertise(&["::1"], 6201);
+    service.allow_propagation().await;
+
+    let resolver = MdnsResolver::new(Duration::from_secs(5)).expect("failed to create resolver");
+    let query_name = Name::from_utf8(&service.host_name).expect("invalid hostname");
+
+    let records = query_with_retry(&resolver, &query_name, RecordType::AAAA).await;
+
+    assert!(
+        contains_ipv6(&records, std::net::Ipv6Addr::LOCALHOST),
+        "expected IPv6 record for {} but found {:?}",
+        service.host_name,
+        records
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn resolves_dual_stack_hostname() {
+    let service = TestMdnsService::advertise(&["127.0.0.1", "::1"], 6202);
+    service.allow_propagation().await;
+
+    let resolver = MdnsResolver::new(Duration::from_secs(5)).expect("failed to create resolver");
+    let query_name = Name::from_utf8(&service.host_name).expect("invalid hostname");
+
+    let ipv4_records = query_with_retry(&resolver, &query_name, RecordType::A).await;
+    assert!(
+        contains_ipv4(&ipv4_records, Ipv4Addr::LOCALHOST),
+        "expected IPv4 record for {} but found {:?}",
+        service.host_name,
+        ipv4_records
+    );
+
+    let ipv6_records = query_with_retry(&resolver, &query_name, RecordType::AAAA).await;
+    assert!(
+        contains_ipv6(&ipv6_records, std::net::Ipv6Addr::LOCALHOST),
+        "expected IPv6 record for {} but found {:?}",
+        service.host_name,
+        ipv6_records
+    );
+}

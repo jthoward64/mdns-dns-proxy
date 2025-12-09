@@ -1,5 +1,5 @@
 use hickory_proto::rr::{Name, Record, RecordType};
-use mdns_sd::ServiceDaemon;
+use mdns_sd::{IfKind, ServiceDaemon};
 use std::time::Duration;
 use tracing::{debug, warn};
 
@@ -16,6 +16,8 @@ impl MdnsResolver {
     /// Create a new mDNS resolver
     pub fn new(cache_ttl: Duration) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let daemon = ServiceDaemon::new()?;
+        daemon.enable_interface(IfKind::All)?;
+        daemon.accept_unsolicited(true)?;
         
         Ok(Self {
             daemon,

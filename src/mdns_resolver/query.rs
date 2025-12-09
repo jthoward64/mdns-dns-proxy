@@ -251,13 +251,16 @@ async fn resolve_hostname_to_ipv4(
                             for addr in info.get_addresses() {
                                 match addr {
                                     mdns_sd::ScopedIp::V4(ipv4) => {
+                                        let ipv4_addr = ipv4.addr();
                                         let name = Name::from_utf8(hostname)?;
                                         let record = Record::from_rdata(
                                             name,
                                             120,
-                                            RData::A(hickory_proto::rr::rdata::A::from(*ipv4.addr())),
+                                            RData::A(hickory_proto::rr::rdata::A::from(*ipv4_addr)),
                                         );
                                         records.push(record);
+                                        
+                                        debug!("Found IPv4 address for {}: {}", hostname, ipv4_addr);
                                     }
                                     _ => {}
                                 }
@@ -300,20 +303,30 @@ async fn resolve_hostname_to_ipv6(
                         if info_hostname == hostname || info_hostname.trim_end_matches('.') == hostname.trim_end_matches('.') {
                             let mut records = Vec::new();
                             
+                            let mut records_string = String::new();
                             for addr in info.get_addresses() {
+                                records_string.push_str(&format!("{:?} ", addr));
                                 match addr {
                                     mdns_sd::ScopedIp::V6(ipv6) => {
+                                        let ipv6_addr = ipv6.addr();
+                                        // Include all IPv6 addresses: link-local, ULA, and global
+                                        // Link-local (fe80::/10), ULA (fc00::/7), and global are all valid
                                         let name = Name::from_utf8(hostname)?;
                                         let record = Record::from_rdata(
                                             name,
                                             120,
-                                            RData::AAAA(hickory_proto::rr::rdata::AAAA::from(*ipv6.addr())),
+                                            RData::AAAA(hickory_proto::rr::rdata::AAAA::from(*ipv6_addr)),
                                         );
                                         records.push(record);
+                                        
+                                        debug!("Found IPv6 address for {}: {}", hostname, ipv6_addr);
                                     }
                                     _ => {}
                                 }
                             }
+
+
+                            assert!(!records.is_empty(), "Expected at least one IPv6 record for {}, found none. Records: {}", hostname, records_string);
                             
                             if !records.is_empty() {
                                 return Ok(records);
