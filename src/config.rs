@@ -93,12 +93,6 @@ fn default_cache_enabled() -> bool {
     true
 }
 
-#[cfg(test)]
-fn default_log_level() -> String {
-    "debug".to_string()
-}
-
-#[cfg(not(test))]
 fn default_log_level() -> String {
     "info".to_string()
 }

@@ -300,12 +300,14 @@ async fn resolve_hostname_to_ipv6(
                 match timeout(Duration::from_millis(200), receiver.recv_async()).await {
                     Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
                         let info_hostname = info.get_hostname();
+                        debug!("Checking hostname: {} against {}", info_hostname, hostname);
+                        debug!("Service has {} addresses", info.get_addresses().len());
+                        
                         if info_hostname == hostname || info_hostname.trim_end_matches('.') == hostname.trim_end_matches('.') {
                             let mut records = Vec::new();
                             
-                            let mut records_string = String::new();
                             for addr in info.get_addresses() {
-                                records_string.push_str(&format!("{:?} ", addr));
+                                debug!("  Address: {:?}", addr);
                                 match addr {
                                     mdns_sd::ScopedIp::V6(ipv6) => {
                                         let ipv6_addr = ipv6.addr();
@@ -324,12 +326,11 @@ async fn resolve_hostname_to_ipv6(
                                     _ => {}
                                 }
                             }
-
-
-                            assert!(!records.is_empty(), "Expected at least one IPv6 record for {}, found none. Records: {}", hostname, records_string);
                             
                             if !records.is_empty() {
                                 return Ok(records);
+                            } else {
+                                debug!("No IPv6 addresses found for {} (service has IPv4 only or no addresses)", hostname);
                             }
                         }
                     }
