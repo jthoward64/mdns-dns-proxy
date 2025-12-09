@@ -224,16 +224,70 @@ pub async fn query_txt(
     Ok(records)
 }
 
+/// Discover all advertised service types on the network
+async fn discover_service_types(daemon: &ServiceDaemon) -> Vec<String> {
+    let mut service_types = Vec::new();
+    
+    // Browse for the meta-query service to discover all service types
+    // Use a shorter timeout to avoid blocking too long
+    if let Ok(receiver) = daemon.browse("_services._dns-sd._udp.local.") {
+        let timeout_duration = Duration::from_millis(300);
+        let start = std::time::Instant::now();
+        
+        loop {
+            if start.elapsed() > timeout_duration {
+                break;
+            }
+            
+            match timeout(Duration::from_millis(50), receiver.recv_async()).await {
+                Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
+                    // The fullname is the service type
+                    let service_type = info.get_fullname().to_string();
+                    if !service_types.contains(&service_type) {
+                        debug!("Discovered service type: {}", service_type);
+                        service_types.push(service_type);
+                    }
+                }
+                Ok(Ok(ServiceEvent::SearchStopped(_))) => break,
+                Ok(Err(_)) => break,
+                Err(_) => continue,
+                _ => {}
+            }
+        }
+    }
+    
+    // If no services discovered via meta-query, fall back to comprehensive common types
+    if service_types.is_empty() {
+        debug!("No service types discovered via meta-query, using fallback list");
+        service_types = vec![
+            "_http._tcp.local.".to_string(),
+            "_https._tcp.local.".to_string(),
+            "_ssh._tcp.local.".to_string(),
+            "_sftp-ssh._tcp.local.".to_string(),
+            "_smb._tcp.local.".to_string(),
+            "_afpovertcp._tcp.local.".to_string(),
+            "_workstation._tcp.local.".to_string(),
+            "_device-info._tcp.local.".to_string(),
+            "_companion-link._tcp.local.".to_string(),
+            "_airplay._tcp.local.".to_string(),
+            "_raop._tcp.local.".to_string(),
+            "_homekit._tcp.local.".to_string(),
+        ];
+    }
+    
+    service_types
+}
+
 /// Resolve hostname to IPv4 addresses
 async fn resolve_hostname_to_ipv4(
     daemon: &ServiceDaemon,
     hostname: &str,
 ) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
-    // Try browsing for common service types to find the host
-    let service_types = vec!["_http._tcp.local.", "_ssh._tcp.local.", "_device-info._tcp.local."];
+    // Dynamically discover service types
+    let service_types = discover_service_types(daemon).await;
     
-    for service_type in service_types {
-        if let Ok(receiver) = daemon.browse(service_type) {
+    for service_type in &service_types {
+        if let Ok(receiver) = daemon.browse(service_type.as_str()) {
             let timeout_duration = Duration::from_secs(1);
             let start = std::time::Instant::now();
             
@@ -285,10 +339,11 @@ async fn resolve_hostname_to_ipv6(
     daemon: &ServiceDaemon,
     hostname: &str,
 ) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
-    let service_types = vec!["_http._tcp.local.", "_ssh._tcp.local.", "_device-info._tcp.local."];
+    // Dynamically discover service types
+    let service_types = discover_service_types(daemon).await;
     
-    for service_type in service_types {
-        if let Ok(receiver) = daemon.browse(service_type) {
+    for service_type in &service_types {
+        if let Ok(receiver) = daemon.browse(service_type.as_str()) {
             let timeout_duration = Duration::from_secs(1);
             let start = std::time::Instant::now();
             
