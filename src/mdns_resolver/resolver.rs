@@ -34,8 +34,8 @@ impl MdnsResolver {
         debug!("Querying mDNS for {} (type: {:?})", query_name, record_type);
 
         // Check cache first
-        if let Some(cached) = self.cache.get(&query_name) {
-            debug!("Returning cached results for {}", query_name);
+        if let Some(cached) = self.cache.get(&query_name, record_type) {
+            debug!("Returning cached results for {} (type: {:?})", query_name, record_type);
             return Ok(cached);
         }
 
@@ -54,7 +54,7 @@ impl MdnsResolver {
 
         // Cache the results
         if !records.is_empty() {
-            self.cache.insert(&query_name, records.clone());
+            self.cache.insert(&query_name, record_type, records.clone());
         }
 
         Ok(records)

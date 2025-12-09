@@ -40,7 +40,7 @@ fn test_resolver_with_custom_ttl() {
 #[tokio::test]
 async fn test_cache_miss_on_empty_cache() {
     let cache = Cache::new(Duration::from_secs(120));
-    let cached = cache.get("test.local");
+    let cached = cache.get("test.local", RecordType::A);
     assert!(cached.is_none());
 }
 
@@ -49,9 +49,9 @@ async fn test_cache_hit_after_insert() {
     let cache = Cache::new(Duration::from_secs(120));
     let records = vec![create_test_record("test.local", 120)];
     
-    cache.insert("test.local", records.clone());
+    cache.insert("test.local", RecordType::A, records.clone());
     
-    let cached = cache.get("test.local");
+    let cached = cache.get("test.local", RecordType::A);
     assert!(cached.is_some());
     assert_eq!(cached.unwrap().len(), 1);
 }
@@ -61,30 +61,30 @@ async fn test_cache_expiration() {
     let cache = Cache::new(Duration::from_millis(100));
     let records = vec![create_test_record("test.local", 120)];
     
-    cache.insert("test.local", records);
+    cache.insert("test.local", RecordType::A, records);
     
     // Should be cached immediately
-    assert!(cache.get("test.local").is_some());
+    assert!(cache.get("test.local", RecordType::A).is_some());
     
     // Wait for cache to expire
     tokio::time::sleep(Duration::from_millis(150)).await;
     
     // Should be expired now
-    assert!(cache.get("test.local").is_none());
+    assert!(cache.get("test.local", RecordType::A).is_none());
 }
 
 #[tokio::test]
 async fn test_cache_multiple_entries() {
     let cache = Cache::new(Duration::from_secs(120));
     
-    cache.insert("host1.local", vec![create_test_record("host1.local", 120)]);
-    cache.insert("host2.local", vec![create_test_record("host2.local", 120)]);
-    cache.insert("host3.local", vec![create_test_record("host3.local", 120)]);
+    cache.insert("host1.local", RecordType::A, vec![create_test_record("host1.local", 120)]);
+    cache.insert("host2.local", RecordType::A, vec![create_test_record("host2.local", 120)]);
+    cache.insert("host3.local", RecordType::A, vec![create_test_record("host3.local", 120)]);
     
-    assert!(cache.get("host1.local").is_some());
-    assert!(cache.get("host2.local").is_some());
-    assert!(cache.get("host3.local").is_some());
-    assert!(cache.get("host4.local").is_none());
+    assert!(cache.get("host1.local", RecordType::A).is_some());
+    assert!(cache.get("host2.local", RecordType::A).is_some());
+    assert!(cache.get("host3.local", RecordType::A).is_some());
+    assert!(cache.get("host4.local", RecordType::A).is_none());
 }
 
 #[tokio::test]
@@ -97,11 +97,11 @@ async fn test_cache_overwrites_existing() {
         create_test_record("test.local", 120),
     ];
     
-    cache.insert("test.local", records1);
-    assert_eq!(cache.get("test.local").unwrap().len(), 1);
+    cache.insert("test.local", RecordType::A, records1);
+    assert_eq!(cache.get("test.local", RecordType::A).unwrap().len(), 1);
     
-    cache.insert("test.local", records2);
-    assert_eq!(cache.get("test.local").unwrap().len(), 2);
+    cache.insert("test.local", RecordType::A, records2);
+    assert_eq!(cache.get("test.local", RecordType::A).unwrap().len(), 2);
 }
 
 #[tokio::test]
@@ -109,20 +109,20 @@ async fn test_cache_cleanup_on_insert() {
     let cache = Cache::new(Duration::from_millis(100));
     
     // Add some entries
-    cache.insert("host1.local", vec![create_test_record("host1.local", 120)]);
-    cache.insert("host2.local", vec![create_test_record("host2.local", 120)]);
+    cache.insert("host1.local", RecordType::A, vec![create_test_record("host1.local", 120)]);
+    cache.insert("host2.local", RecordType::A, vec![create_test_record("host2.local", 120)]);
     
     // Wait for expiration
     tokio::time::sleep(Duration::from_millis(150)).await;
     
     // Add a new entry, which should trigger cleanup
-    cache.insert("host3.local", vec![create_test_record("host3.local", 120)]);
+    cache.insert("host3.local", RecordType::A, vec![create_test_record("host3.local", 120)]);
     
     // Old entries should be gone
-    assert!(cache.get("host1.local").is_none());
-    assert!(cache.get("host2.local").is_none());
+    assert!(cache.get("host1.local", RecordType::A).is_none());
+    assert!(cache.get("host2.local", RecordType::A).is_none());
     // New entry should exist
-    assert!(cache.get("host3.local").is_some());
+    assert!(cache.get("host3.local", RecordType::A).is_some());
 }
 
 #[test]
@@ -220,23 +220,23 @@ async fn test_cache_key_case_sensitivity() {
     let cache = Cache::new(Duration::from_secs(120));
     let records = vec![create_test_record("test.local", 120)];
     
-    cache.insert("test.local", records.clone());
+    cache.insert("test.local", RecordType::A, records.clone());
     
     // Same key should hit cache
-    assert!(cache.get("test.local").is_some());
+    assert!(cache.get("test.local", RecordType::A).is_some());
     
     // Different case should miss (cache is case-sensitive)
-    assert!(cache.get("TEST.LOCAL").is_none());
-    assert!(cache.get("Test.Local").is_none());
+    assert!(cache.get("TEST.LOCAL", RecordType::A).is_none());
+    assert!(cache.get("Test.Local", RecordType::A).is_none());
 }
 
 #[tokio::test]
 async fn test_empty_cache_returns_none() {
     let cache = Cache::new(Duration::from_secs(120));
     
-    assert!(cache.get("nonexistent.local").is_none());
-    assert!(cache.get("").is_none());
-    assert!(cache.get("any.domain.local").is_none());
+    assert!(cache.get("nonexistent.local", RecordType::A).is_none());
+    assert!(cache.get("", RecordType::A).is_none());
+    assert!(cache.get("any.domain.local", RecordType::A).is_none());
 }
 
 #[tokio::test]
@@ -244,11 +244,11 @@ async fn test_cache_ttl_zero() {
     let cache = Cache::new(Duration::from_secs(0));
     let records = vec![create_test_record("test.local", 120)];
     
-    cache.insert("test.local", records);
+    cache.insert("test.local", RecordType::A, records);
     
     // With 0 TTL, cache should effectively be disabled
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(cache.get("test.local").is_none());
+    assert!(cache.get("test.local", RecordType::A).is_none());
 }
 
 #[tokio::test]
@@ -256,10 +256,10 @@ async fn test_cache_with_empty_records() {
     let cache = Cache::new(Duration::from_secs(120));
     
     // Cache empty vector
-    cache.insert("test.local", vec![]);
+    cache.insert("test.local", RecordType::A, vec![]);
     
     // Should return empty vector, not None
-    let cached = cache.get("test.local");
+    let cached = cache.get("test.local", RecordType::A);
     assert!(cached.is_some());
     assert!(cached.unwrap().is_empty());
 }
@@ -274,9 +274,9 @@ async fn test_multiple_records_for_same_name() {
         create_test_record("test.local", 120),
     ];
     
-    cache.insert("test.local", records);
+    cache.insert("test.local", RecordType::A, records);
     
-    let cached = cache.get("test.local");
+    let cached = cache.get("test.local", RecordType::A);
     assert!(cached.is_some());
     assert_eq!(cached.unwrap().len(), 3);
 }
@@ -324,14 +324,14 @@ async fn test_concurrent_cache_access() {
     let cache = Arc::new(Cache::new(Duration::from_secs(120)));
     let records = vec![create_test_record("test.local", 120)];
     
-    cache.insert("test.local", records);
+    cache.insert("test.local", RecordType::A, records);
     
     // Spawn multiple tasks accessing cache concurrently
     let mut handles = vec![];
     for _ in 0..10 {
         let cache_clone = cache.clone();
         let handle = tokio::spawn(async move {
-            cache_clone.get("test.local")
+            cache_clone.get("test.local", RecordType::A)
         });
         handles.push(handle);
     }
@@ -351,4 +351,26 @@ fn test_resolver_creation_different_ttls() {
     assert!(MdnsResolver::new(Duration::from_secs(300)).is_ok());
     assert!(MdnsResolver::new(Duration::from_secs(3600)).is_ok());
     assert!(MdnsResolver::new(Duration::from_millis(500)).is_ok());
+}
+
+#[tokio::test]
+async fn test_cache_record_type_aware() {
+    let cache = Cache::new(Duration::from_secs(120));
+    let a_records = vec![create_test_record("test.local", 120)];
+    let aaaa_records = vec![create_test_record("test.local", 120)];
+    
+    // Insert different record types for the same name
+    cache.insert("test.local", RecordType::A, a_records.clone());
+    cache.insert("test.local", RecordType::AAAA, aaaa_records.clone());
+    
+    // Should be able to retrieve both independently
+    let cached_a = cache.get("test.local", RecordType::A);
+    let cached_aaaa = cache.get("test.local", RecordType::AAAA);
+    let cached_ptr = cache.get("test.local", RecordType::PTR);
+    
+    assert!(cached_a.is_some());
+    assert_eq!(cached_a.unwrap().len(), 1);
+    assert!(cached_aaaa.is_some());
+    assert_eq!(cached_aaaa.unwrap().len(), 1);
+    assert!(cached_ptr.is_none()); // PTR was never cached
 }
