@@ -12,6 +12,12 @@ async fn main() {
     // Parse command-line arguments
     let args = Args::parse();
     
+    // Check if user wants to print example config
+    if args.print_example_config {
+        Config::print_example_config();
+        return;
+    }
+    
     // Load configuration
     let config = match Config::load(args) {
         Ok(c) => c,
