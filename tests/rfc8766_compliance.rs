@@ -449,13 +449,14 @@ async fn test_ipv6_link_local_detection() {
 #[serial]
 async fn test_record_suppression_config() {
     use mdns_dns_proxy::dns_handler::admin_records::{RecordSuppressionConfig, should_suppress_address_record};
+    use hickory_proto::rr::rdata::A;
     use std::net::{IpAddr, Ipv4Addr};
     
     let name = Name::from_utf8("test.local.").expect("invalid name");
     let link_local_record = Record::from_rdata(
         name.clone(),
         10,
-        RData::A(hickory_proto::rr::rdata::A::from(Ipv4Addr::new(169, 254, 1, 1))),
+        RData::A(A::from(Ipv4Addr::new(169, 254, 1, 1))),
     );
     
     // With suppression disabled, link-local should NOT be suppressed
@@ -482,7 +483,7 @@ async fn test_record_suppression_config() {
     let private_record = Record::from_rdata(
         name,
         10,
-        RData::A(hickory_proto::rr::rdata::A::from(Ipv4Addr::new(192, 168, 1, 1))),
+        RData::A(A::from(Ipv4Addr::new(192, 168, 1, 1))),
     );
     assert!(
         !should_suppress_address_record(&private_record, &config),
