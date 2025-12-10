@@ -1,8 +1,8 @@
 use hickory_proto::rr::{Name, Record, RecordType};
 use mdns_sd::{IfKind, ServiceDaemon};
 use std::sync::Arc;
-use std::time::Duration;
 use tracing::{debug, warn};
+use crate::config::Config;
 
 /// Maximum TTL for unicast DNS responses per RFC 8766 Section 5.5.1
 /// TTLs are capped at 10 seconds to ensure timely updates for remote clients
@@ -15,18 +15,20 @@ use super::query;
 pub struct MdnsResolver {
     daemon: Arc<ServiceDaemon>,
     pub(crate) cache: Cache,
+    config: Arc<Config>,
 }
 
 impl MdnsResolver {
     /// Create a new mDNS resolver
-    pub fn new(cache_ttl: Duration) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn new(config: Arc<Config>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let daemon = Arc::new(ServiceDaemon::new()?);
         daemon.enable_interface(IfKind::All)?;
         daemon.accept_unsolicited(true)?;
         
         Ok(Self {
             daemon,
-            cache: Cache::new(cache_ttl),
+            cache: Cache::new(config.cache_ttl()),
+            config,
         })
     }
 
@@ -34,14 +36,15 @@ impl MdnsResolver {
     /// This is useful for testing when you want to share a daemon between advertiser and resolver
     pub fn with_daemon(
         daemon: Arc<ServiceDaemon>,
-        cache_ttl: Duration,
+        config: Arc<Config>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         daemon.enable_interface(IfKind::All)?;
         daemon.accept_unsolicited(true)?;
         
         Ok(Self {
             daemon,
-            cache: Cache::new(cache_ttl),
+            cache: Cache::new(config.cache_ttl()),
+            config,
         })
     }
 
@@ -63,11 +66,11 @@ impl MdnsResolver {
 
         // Perform mDNS query based on record type
         let mut records = match record_type {
-            RecordType::A => query::query_a(&self.daemon, name).await?,
-            RecordType::AAAA => query::query_aaaa(&self.daemon, name).await?,
-            RecordType::PTR => query::query_ptr(&self.daemon, name).await?,
-            RecordType::SRV => query::query_srv(&self.daemon, name).await?,
-            RecordType::TXT => query::query_txt(&self.daemon, name).await?,
+            RecordType::A => query::query_a(&self.daemon, name, &self.config).await?,
+            RecordType::AAAA => query::query_aaaa(&self.daemon, name, &self.config).await?,
+            RecordType::PTR => query::query_ptr(&self.daemon, name, &self.config).await?,
+            RecordType::SRV => query::query_srv(&self.daemon, name, &self.config).await?,
+            RecordType::TXT => query::query_txt(&self.daemon, name, &self.config).await?,
             RecordType::SOA => query::query_soa(&self.daemon, name).await?,
             RecordType::NS => query::query_ns(&self.daemon, name).await?,
             _ => {

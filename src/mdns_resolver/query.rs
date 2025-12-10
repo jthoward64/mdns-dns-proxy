@@ -3,11 +3,13 @@ use mdns_sd::{ServiceDaemon, ServiceEvent};
 use std::time::Duration;
 use tokio::time::timeout;
 use tracing::{debug, error, info};
+use crate::config::Config;
 
 /// Query for A records (IPv4)
 pub async fn query_a(
     daemon: &ServiceDaemon,
     name: &Name,
+    config: &Config,
 ) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
     let hostname = name.to_utf8();
     
@@ -17,13 +19,14 @@ pub async fn query_a(
     }
 
     // Try to resolve as a service instance or hostname
-    resolve_hostname_to_ipv4(daemon, &hostname).await
+    resolve_hostname_to_ipv4(daemon, &hostname, config).await
 }
 
 /// Query for AAAA records (IPv6)
 pub async fn query_aaaa(
     daemon: &ServiceDaemon,
     name: &Name,
+    config: &Config,
 ) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
     let hostname = name.to_utf8();
     
@@ -31,13 +34,14 @@ pub async fn query_aaaa(
         return Ok(Vec::new());
     }
 
-    resolve_hostname_to_ipv6(daemon, &hostname).await
+    resolve_hostname_to_ipv6(daemon, &hostname, config).await
 }
 
 /// Query for PTR records (service enumeration)
 pub async fn query_ptr(
     daemon: &ServiceDaemon,
     name: &Name,
+    config: &Config,
 ) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
     let service_type = name.to_utf8();
     
@@ -47,7 +51,8 @@ pub async fn query_ptr(
     let mut records = Vec::new();
     
     // Wait for service discovery events with timeout
-    let timeout_duration = Duration::from_secs(2);
+    let timeout_duration = config.service_query_timeout();
+    let poll_interval = config.service_poll_interval();
     let start = std::time::Instant::now();
     
     loop {
@@ -55,7 +60,7 @@ pub async fn query_ptr(
             break;
         }
         
-        match timeout(Duration::from_millis(500), receiver.recv_async()).await {
+        match timeout(poll_interval, receiver.recv_async()).await {
             Ok(Ok(event)) => {
                 match event {
                     ServiceEvent::ServiceResolved(info) => {
@@ -101,6 +106,7 @@ pub async fn query_ptr(
 pub async fn query_srv(
     daemon: &ServiceDaemon,
     name: &Name,
+    config: &Config,
 ) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
     let service_name = name.to_utf8();
     
@@ -120,7 +126,8 @@ pub async fn query_srv(
     let receiver = daemon.browse(&service_type)?;
     let mut records = Vec::new();
     
-    let timeout_duration = Duration::from_secs(2);
+    let timeout_duration = config.service_query_timeout();
+    let poll_interval = config.service_poll_interval();
     let start = std::time::Instant::now();
     
     // Loop through events until we find our service or timeout
@@ -129,7 +136,7 @@ pub async fn query_srv(
             break;
         }
         
-        match timeout(Duration::from_millis(500), receiver.recv_async()).await {
+        match timeout(poll_interval, receiver.recv_async()).await {
             Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
                 if info.get_fullname() == service_name {
                     let srv_name = Name::from_utf8(&service_name)?;
@@ -164,6 +171,7 @@ pub async fn query_srv(
 pub async fn query_txt(
     daemon: &ServiceDaemon,
     name: &Name,
+    config: &Config,
 ) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
     let service_name = name.to_utf8();
     
@@ -182,7 +190,8 @@ pub async fn query_txt(
     let receiver = daemon.browse(&service_type)?;
     let mut records = Vec::new();
     
-    let timeout_duration = Duration::from_secs(2);
+    let timeout_duration = config.service_query_timeout();
+    let poll_interval = config.service_poll_interval();
     let start = std::time::Instant::now();
     
     // Loop through events until we find our service or timeout
@@ -191,7 +200,7 @@ pub async fn query_txt(
             break;
         }
         
-        match timeout(Duration::from_millis(500), receiver.recv_async()).await {
+        match timeout(poll_interval, receiver.recv_async()).await {
             Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
                 if info.get_fullname() == service_name {
                     let txt_name = Name::from_utf8(&service_name)?;
@@ -225,13 +234,13 @@ pub async fn query_txt(
 }
 
 /// Discover all advertised service types on the network
-async fn discover_service_types(daemon: &ServiceDaemon) -> Vec<String> {
+async fn discover_service_types(daemon: &ServiceDaemon, config: &Config) -> Vec<String> {
     let mut service_types = Vec::new();
     
     // Browse for the meta-query service to discover all service types
-    // Use a shorter timeout to avoid blocking too long
     if let Ok(receiver) = daemon.browse("_services._dns-sd._udp.local.") {
-        let timeout_duration = Duration::from_millis(300);
+        let timeout_duration = config.service_discovery_timeout();
+        let poll_interval = Duration::from_millis(50); // Fast polling for meta-query
         let start = std::time::Instant::now();
         
         loop {
@@ -239,7 +248,7 @@ async fn discover_service_types(daemon: &ServiceDaemon) -> Vec<String> {
                 break;
             }
             
-            match timeout(Duration::from_millis(50), receiver.recv_async()).await {
+            match timeout(poll_interval, receiver.recv_async()).await {
                 Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
                     // The fullname is the service type
                     let service_type = info.get_fullname().to_string();
@@ -282,13 +291,15 @@ async fn discover_service_types(daemon: &ServiceDaemon) -> Vec<String> {
 async fn resolve_hostname_to_ipv4(
     daemon: &ServiceDaemon,
     hostname: &str,
+    config: &Config,
 ) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
     // Dynamically discover service types
-    let service_types = discover_service_types(daemon).await;
+    let service_types = discover_service_types(daemon, config).await;
     
     for service_type in &service_types {
         if let Ok(receiver) = daemon.browse(service_type.as_str()) {
-            let timeout_duration = Duration::from_secs(1);
+            let timeout_duration = config.hostname_resolution_timeout();
+            let poll_interval = Duration::from_millis(200);
             let start = std::time::Instant::now();
             
             loop {
@@ -296,7 +307,7 @@ async fn resolve_hostname_to_ipv4(
                     break;
                 }
                 
-                match timeout(Duration::from_millis(200), receiver.recv_async()).await {
+                match timeout(poll_interval, receiver.recv_async()).await {
                     Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
                         let info_hostname = info.get_hostname();
                         if info_hostname == hostname || info_hostname.trim_end_matches('.') == hostname.trim_end_matches('.') {
@@ -397,13 +408,15 @@ pub async fn query_ns(
 async fn resolve_hostname_to_ipv6(
     daemon: &ServiceDaemon,
     hostname: &str,
+    config: &Config,
 ) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
     // Dynamically discover service types
-    let service_types = discover_service_types(daemon).await;
+    let service_types = discover_service_types(daemon, config).await;
     
     for service_type in &service_types {
         if let Ok(receiver) = daemon.browse(service_type.as_str()) {
-            let timeout_duration = Duration::from_secs(1);
+            let timeout_duration = config.hostname_resolution_timeout();
+            let poll_interval = Duration::from_millis(200);
             let start = std::time::Instant::now();
             
             loop {
@@ -411,7 +424,7 @@ async fn resolve_hostname_to_ipv6(
                     break;
                 }
                 
-                match timeout(Duration::from_millis(200), receiver.recv_async()).await {
+                match timeout(poll_interval, receiver.recv_async()).await {
                     Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
                         let info_hostname = info.get_hostname();
                         debug!("Checking hostname: {} against {}", info_hostname, hostname);

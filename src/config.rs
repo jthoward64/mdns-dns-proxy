@@ -59,17 +59,24 @@ pub struct LoggingConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MdnsConfig {
-    /// mDNS query timeout in milliseconds
-    #[serde(default = "default_query_timeout")]
-    pub query_timeout_ms: u64,
+    /// PTR/SRV/TXT query timeout in milliseconds
+    /// How long to wait for service discovery responses
+    #[serde(default = "default_service_query_timeout")]
+    pub service_query_timeout_ms: u64,
     
-    /// Service discovery timeout in milliseconds
-    #[serde(default = "default_discovery_timeout")]
-    pub discovery_timeout_ms: u64,
+    /// Service discovery meta-query timeout in milliseconds
+    /// Timeout for _services._dns-sd._udp.local. discovery
+    #[serde(default = "default_service_discovery_timeout")]
+    pub service_discovery_timeout_ms: u64,
     
-    /// Service types to query when resolving hostnames
-    #[serde(default = "default_service_types")]
-    pub service_types: Vec<String>,
+    /// Per-event poll timeout in milliseconds during service queries
+    #[serde(default = "default_service_poll_interval")]
+    pub service_poll_interval_ms: u64,
+    
+    /// Hostname resolution timeout in milliseconds
+    /// Timeout for A/AAAA queries when resolving hostnames
+    #[serde(default = "default_hostname_resolution_timeout")]
+    pub hostname_resolution_timeout_ms: u64,
 }
 
 // Default value functions
@@ -97,20 +104,28 @@ fn default_log_level() -> String {
     "info".to_string()
 }
 
-fn default_query_timeout() -> u64 {
-    1000
+fn default_service_query_timeout() -> u64 {
+    option_env!("MDNS_DNS_PROXY_DEFAULT_SERVICE_QUERY_TIMEOUT")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(2000)
 }
 
-fn default_discovery_timeout() -> u64 {
-    2000
+fn default_service_discovery_timeout() -> u64 {
+    option_env!("MDNS_DNS_PROXY_DEFAULT_SERVICE_DISCOVERY_TIMEOUT")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(300)
 }
 
-fn default_service_types() -> Vec<String> {
-    vec![
-        "_http._tcp.local.".to_string(),
-        "_ssh._tcp.local.".to_string(),
-        "_device-info._tcp.local.".to_string(),
-    ]
+fn default_service_poll_interval() -> u64 {
+    option_env!("MDNS_DNS_PROXY_DEFAULT_SERVICE_POLL_INTERVAL")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(500)
+}
+
+fn default_hostname_resolution_timeout() -> u64 {
+    option_env!("MDNS_DNS_PROXY_DEFAULT_HOSTNAME_RESOLUTION_TIMEOUT")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1000)
 }
 
 impl Default for ServerConfig {
@@ -143,9 +158,10 @@ impl Default for LoggingConfig {
 impl Default for MdnsConfig {
     fn default() -> Self {
         Self {
-            query_timeout_ms: default_query_timeout(),
-            discovery_timeout_ms: default_discovery_timeout(),
-            service_types: default_service_types(),
+            service_query_timeout_ms: default_service_query_timeout(),
+            service_discovery_timeout_ms: default_service_discovery_timeout(),
+            service_poll_interval_ms: default_service_poll_interval(),
+            hostname_resolution_timeout_ms: default_hostname_resolution_timeout(),
         }
     }
 }
@@ -189,9 +205,13 @@ pub struct Args {
     #[arg(short, long, env = "MDNS_DNS_PROXY_LOG_LEVEL")]
     pub log_level: Option<String>,
     
-    /// mDNS query timeout in milliseconds
-    #[arg(long, env = "MDNS_DNS_PROXY_QUERY_TIMEOUT")]
-    pub query_timeout: Option<u64>,
+    /// Service query timeout in milliseconds (PTR/SRV/TXT queries)
+    #[arg(long, env = "MDNS_DNS_PROXY_SERVICE_QUERY_TIMEOUT")]
+    pub service_query_timeout: Option<u64>,
+    
+    /// Hostname resolution timeout in milliseconds (A/AAAA queries)
+    #[arg(long, env = "MDNS_DNS_PROXY_HOSTNAME_RESOLUTION_TIMEOUT")]
+    pub hostname_resolution_timeout: Option<u64>,
     
     /// Print an example configuration file with defaults and exit
     #[arg(long)]
@@ -201,62 +221,64 @@ pub struct Args {
 impl Config {
     /// Print an example configuration file with all defaults and comments
     pub fn print_example_config() {
-        println!(r#"# mDNS-DNS Discovery Proxy Configuration
-# 
-# This file configures the behavior of the mDNS-DNS proxy server.
-# All settings have sensible defaults and are optional.
-
-[server]
-# IP address to bind the DNS server to
-# Default: 127.0.0.1 (localhost only)
-# Use 0.0.0.0 to listen on all interfaces
-bind_address = "127.0.0.1"
-
-# Port to bind the DNS server to
-# Default: 5335
-# Note: Ports below 1024 require root/admin privileges
-port = 5335
-
-# TCP connection timeout in seconds
-# Default: 30
-tcp_timeout = 30
-
-[cache]
-# Cache TTL (time-to-live) in seconds
-# How long to cache mDNS query results
-# Default: 120 (2 minutes)
-ttl_seconds = 120
-
-# Enable or disable result caching
-# Default: true
-enabled = true
-
-[logging]
-# Log level for the application
-# Options: trace, debug, info, warn, error
-# Default: info
-level = "info"
-
-[mdns]
-# Timeout for individual mDNS queries in milliseconds
-# Default: 1000 (1 second)
-query_timeout_ms = 1000
-
-# Timeout for service discovery operations in milliseconds
-# Default: 2000 (2 seconds)
-discovery_timeout_ms = 2000
-
-# Service types to query when resolving hostnames
-# These are used to discover devices by hostname
-# Default: _http._tcp.local., _ssh._tcp.local., _device-info._tcp.local.
-service_types = [
-    "_http._tcp.local.",
-    "_ssh._tcp.local.",
-    "_device-info._tcp.local.",
-    "_smb._tcp.local.",
-    "_afpovertcp._tcp.local.",
-]
-"#);
+        let defaults = Config::default();
+        
+        println!("# mDNS-DNS Discovery Proxy Configuration");
+        println!("# ");
+        println!("# This file configures the behavior of the mDNS-DNS proxy server.");
+        println!("# All settings have sensible defaults and are optional.");
+        println!();
+        println!("[server]");
+        println!("# IP address to bind the DNS server to");
+        println!("# Default: {} (localhost only)", defaults.server.bind_address);
+        println!("# Use 0.0.0.0 to listen on all interfaces");
+        println!("bind_address = \"{}\"", defaults.server.bind_address);
+        println!();
+        println!("# Port to bind the DNS server to");
+        println!("# Default: {}", defaults.server.port);
+        println!("# Note: Ports below 1024 require root/admin privileges");
+        println!("port = {}", defaults.server.port);
+        println!();
+        println!("# TCP connection timeout in seconds");
+        println!("# Default: {}", defaults.server.tcp_timeout);
+        println!("tcp_timeout = {}", defaults.server.tcp_timeout);
+        println!();
+        println!("[cache]");
+        println!("# Cache TTL (time-to-live) in seconds");
+        println!("# How long to cache mDNS query results");
+        println!("# Default: {} ({} minutes)", defaults.cache.ttl_seconds, defaults.cache.ttl_seconds as f64 / 60.0);
+        println!("ttl_seconds = {}", defaults.cache.ttl_seconds);
+        println!();
+        println!("# Enable or disable result caching");
+        println!("# Default: {}", defaults.cache.enabled);
+        println!("enabled = {}", defaults.cache.enabled);
+        println!();
+        println!("[logging]");
+        println!("# Log level for the application");
+        println!("# Options: trace, debug, info, warn, error");
+        println!("# Default: {}", defaults.logging.level);
+        println!("level = \"{}\"", defaults.logging.level);
+        println!();
+        println!("[mdns]");
+        println!("# Timeout for service queries (PTR/SRV/TXT) in milliseconds");
+        println!("# How long to wait for service discovery responses");
+        println!("# Default: {} ({} seconds)", defaults.mdns.service_query_timeout_ms, defaults.mdns.service_query_timeout_ms as f64 / 1000.0);
+        println!("service_query_timeout_ms = {}", defaults.mdns.service_query_timeout_ms);
+        println!();
+        println!("# Timeout for service discovery meta-query in milliseconds");
+        println!("# How long to wait for _services._dns-sd._udp.local. responses");
+        println!("# Default: {} ({} ms)", defaults.mdns.service_discovery_timeout_ms, defaults.mdns.service_discovery_timeout_ms);
+        println!("service_discovery_timeout_ms = {}", defaults.mdns.service_discovery_timeout_ms);
+        println!();
+        println!("# Per-event poll interval during service queries in milliseconds");
+        println!("# How frequently to check for new mDNS events");
+        println!("# Default: {} ({} ms)", defaults.mdns.service_poll_interval_ms, defaults.mdns.service_poll_interval_ms);
+        println!("service_poll_interval_ms = {}", defaults.mdns.service_poll_interval_ms);
+        println!();
+        println!("# Timeout for hostname resolution (A/AAAA queries) in milliseconds");
+        println!("# How long to wait when resolving hostnames to IP addresses");
+        println!("# Default: {} ({} second)", defaults.mdns.hostname_resolution_timeout_ms, defaults.mdns.hostname_resolution_timeout_ms as f64 / 1000.0);
+        println!("hostname_resolution_timeout_ms = {}", defaults.mdns.hostname_resolution_timeout_ms);
     }
     
     /// Load configuration from file, environment variables, and CLI arguments
@@ -291,8 +313,12 @@ service_types = [
             config.logging.level = log_level;
         }
         
-        if let Some(query_timeout) = args.query_timeout {
-            config.mdns.query_timeout_ms = query_timeout;
+        if let Some(service_query_timeout) = args.service_query_timeout {
+            config.mdns.service_query_timeout_ms = service_query_timeout;
+        }
+        
+        if let Some(hostname_resolution_timeout) = args.hostname_resolution_timeout {
+            config.mdns.hostname_resolution_timeout_ms = hostname_resolution_timeout;
         }
         
         Ok(config)
@@ -318,16 +344,24 @@ service_types = [
         std::time::Duration::from_secs(self.cache.ttl_seconds)
     }
     
-    /// Get query timeout as Duration
-    #[allow(dead_code)]
-    pub fn query_timeout(&self) -> std::time::Duration {
-        std::time::Duration::from_millis(self.mdns.query_timeout_ms)
+    /// Get service query timeout as Duration
+    pub fn service_query_timeout(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.mdns.service_query_timeout_ms)
     }
     
-    /// Get discovery timeout as Duration
-    #[allow(dead_code)]
-    pub fn discovery_timeout(&self) -> std::time::Duration {
-        std::time::Duration::from_millis(self.mdns.discovery_timeout_ms)
+    /// Get service discovery timeout as Duration
+    pub fn service_discovery_timeout(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.mdns.service_discovery_timeout_ms)
+    }
+    
+    /// Get service poll interval as Duration
+    pub fn service_poll_interval(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.mdns.service_poll_interval_ms)
+    }
+    
+    /// Get hostname resolution timeout as Duration
+    pub fn hostname_resolution_timeout(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.mdns.hostname_resolution_timeout_ms)
     }
 }
 
@@ -389,9 +423,10 @@ mod tests {
     #[test]
     fn test_default_mdns_config() {
         let mdns = MdnsConfig::default();
-        assert_eq!(mdns.query_timeout_ms, 1000);
-        assert_eq!(mdns.discovery_timeout_ms, 2000);
-        assert_eq!(mdns.service_types.len(), 3);
+        assert_eq!(mdns.service_query_timeout_ms, 2000);
+        assert_eq!(mdns.service_discovery_timeout_ms, 300);
+        assert_eq!(mdns.service_poll_interval_ms, 500);
+        assert_eq!(mdns.hostname_resolution_timeout_ms, 1000);
     }
 
     #[test]
@@ -451,25 +486,25 @@ mod tests {
     }
 
     #[test]
-    fn test_query_timeout_conversion() {
+    fn test_service_query_timeout_conversion() {
         let mut config = Config::default();
         
-        config.mdns.query_timeout_ms = 500;
-        assert_eq!(config.query_timeout(), Duration::from_millis(500));
+        config.mdns.service_query_timeout_ms = 500;
+        assert_eq!(config.service_query_timeout(), Duration::from_millis(500));
         
-        config.mdns.query_timeout_ms = 2000;
-        assert_eq!(config.query_timeout(), Duration::from_millis(2000));
+        config.mdns.service_query_timeout_ms = 3000;
+        assert_eq!(config.service_query_timeout(), Duration::from_millis(3000));
     }
 
     #[test]
-    fn test_discovery_timeout_conversion() {
+    fn test_hostname_resolution_timeout_conversion() {
         let mut config = Config::default();
         
-        config.mdns.discovery_timeout_ms = 1000;
-        assert_eq!(config.discovery_timeout(), Duration::from_millis(1000));
+        config.mdns.hostname_resolution_timeout_ms = 1500;
+        assert_eq!(config.hostname_resolution_timeout(), Duration::from_millis(1500));
         
-        config.mdns.discovery_timeout_ms = 5000;
-        assert_eq!(config.discovery_timeout(), Duration::from_millis(5000));
+        config.mdns.hostname_resolution_timeout_ms = 5000;
+        assert_eq!(config.hostname_resolution_timeout(), Duration::from_millis(5000));
     }
 
     #[test]
@@ -502,9 +537,8 @@ mod tests {
             level = "trace"
             
             [mdns]
-            query_timeout_ms = 1500
-            discovery_timeout_ms = 3000
-            service_types = ["_http._tcp.local.", "_ssh._tcp.local."]
+            service_query_timeout_ms = 1500
+            hostname_resolution_timeout_ms = 3000
         "#;
         
         let config: Config = toml::from_str(toml_str).unwrap();
@@ -514,9 +548,8 @@ mod tests {
         assert_eq!(config.cache.ttl_seconds, 300);
         assert!(!config.cache.enabled);
         assert_eq!(config.logging.level, "trace");
-        assert_eq!(config.mdns.query_timeout_ms, 1500);
-        assert_eq!(config.mdns.discovery_timeout_ms, 3000);
-        assert_eq!(config.mdns.service_types.len(), 2);
+        assert_eq!(config.mdns.service_query_timeout_ms, 1500);
+        assert_eq!(config.mdns.hostname_resolution_timeout_ms, 3000);
     }
 
     #[test]
@@ -552,23 +585,6 @@ mod tests {
     }
 
     #[test]
-    fn test_service_types_customization() {
-        let toml_str = r#"
-            [mdns]
-            service_types = [
-                "_http._tcp.local.",
-                "_https._tcp.local.",
-                "_smb._tcp.local.",
-                "_printer._tcp.local.",
-            ]
-        "#;
-        
-        let config: Config = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.mdns.service_types.len(), 4);
-        assert!(config.mdns.service_types.contains(&"_smb._tcp.local.".to_string()));
-    }
-
-    #[test]
     fn test_config_load_with_defaults() {
         use std::net::Ipv4Addr;
         
@@ -579,7 +595,8 @@ mod tests {
             cache_ttl: None,
             no_cache: false,
             log_level: None,
-            query_timeout: None,
+            service_query_timeout: None,
+            hostname_resolution_timeout: None,
             print_example_config: false,
         };
         
@@ -601,7 +618,8 @@ mod tests {
             cache_ttl: Some(300),
             no_cache: true,
             log_level: Some("debug".to_string()),
-            query_timeout: Some(2000),
+            service_query_timeout: Some(2000),
+            hostname_resolution_timeout: Some(1500),
             print_example_config: false,
         };
         
@@ -611,7 +629,8 @@ mod tests {
         assert_eq!(config.cache.ttl_seconds, 300);
         assert!(!config.cache.enabled);
         assert_eq!(config.logging.level, "debug");
-        assert_eq!(config.mdns.query_timeout_ms, 2000);
+        assert_eq!(config.mdns.service_query_timeout_ms, 2000);
+        assert_eq!(config.mdns.hostname_resolution_timeout_ms, 1500);
     }
 
     #[test]
@@ -639,7 +658,8 @@ mod tests {
             cache_ttl: None,
             no_cache: false,
             log_level: None,
-            query_timeout: None,
+            service_query_timeout: None,
+            hostname_resolution_timeout: None,
             print_example_config: false,
         };
         
@@ -669,7 +689,8 @@ mod tests {
             cache_ttl: None,
             no_cache: false,
             log_level: None,
-            query_timeout: None,
+            service_query_timeout: None,
+            hostname_resolution_timeout: None,
             print_example_config: false,
         };
         
@@ -689,7 +710,8 @@ mod tests {
             cache_ttl: None,
             no_cache: false,
             log_level: None,
-            query_timeout: None,
+            service_query_timeout: None,
+            hostname_resolution_timeout: None,
             print_example_config: false,
         };
         
@@ -706,7 +728,8 @@ mod tests {
             cache_ttl: None,
             no_cache: false,
             log_level: Some("trace".to_string()),
-            query_timeout: None,
+            service_query_timeout: None,
+            hostname_resolution_timeout: None,
             print_example_config: false,
         };
         

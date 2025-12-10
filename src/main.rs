@@ -39,8 +39,11 @@ async fn main() {
           config.cache.ttl_seconds,
           config.cache.enabled);
 
-    // Create mDNS resolver with configured cache TTL
-    let resolver = match MdnsResolver::new(config.cache_ttl()) {
+    // Wrap config in Arc for sharing
+    let config = Arc::new(config);
+
+    // Create mDNS resolver with config
+    let resolver = match MdnsResolver::new(config.clone()) {
         Ok(r) => Arc::new(r),
         Err(e) => {
             error!("Failed to create mDNS resolver: {}", e);

@@ -4,12 +4,19 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use hickory_proto::rr::{Name, RData, Record, RecordType};
-use mdns_dns_proxy::MdnsResolver;
+use mdns_dns_proxy::{Config, MdnsResolver};
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 use serial_test::serial;
 use tokio::time::sleep;
 
 const SERVICE_TYPE: &str = "_http._tcp.local.";
+
+/// Create test config with specified cache TTL
+fn create_test_config(ttl_seconds: u64) -> Arc<Config> {
+    let mut config = Config::default();
+    config.cache.ttl_seconds = ttl_seconds;
+    Arc::new(config)
+}
 
 struct TestMdnsService {
     _daemon: Arc<ServiceDaemon>,
@@ -66,7 +73,7 @@ async fn resolves_ipv4_mdns_hostname() {
     let service = TestMdnsService::advertise(daemon.clone(), &["127.0.0.1"], 6200);
     service.allow_propagation().await;
 
-    let resolver = MdnsResolver::with_daemon(daemon, Duration::from_secs(5))
+    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(5))
         .expect("failed to create resolver");
     let query_name = Name::from_utf8(&service.host_name).expect("invalid hostname");
 
@@ -87,7 +94,7 @@ async fn resolves_srv_record_for_service_instance() {
     let service = TestMdnsService::advertise(daemon.clone(), &["127.0.0.1"], 6300);
     service.allow_propagation().await;
 
-    let resolver = MdnsResolver::with_daemon(daemon, Duration::from_secs(5))
+    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(5))
         .expect("failed to create resolver");
     let srv_name = Name::from_utf8(&service.full_name).expect("invalid service fullname");
 
@@ -151,7 +158,7 @@ async fn resolves_ipv6_mdns_hostname() {
     let service = TestMdnsService::advertise(daemon.clone(), &["127.0.0.1"], 6201);
     service.allow_propagation().await;
 
-    let resolver = MdnsResolver::with_daemon(daemon, Duration::from_secs(5))
+    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(5))
         .expect("failed to create resolver");
     let query_name = Name::from_utf8(&service.host_name).expect("invalid hostname");
 
@@ -175,7 +182,7 @@ async fn resolves_dual_stack_hostname() {
     let service = TestMdnsService::advertise(daemon.clone(), &["127.0.0.1"], 6202);
     service.allow_propagation().await;
 
-    let resolver = MdnsResolver::with_daemon(daemon, Duration::from_secs(5))
+    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(5))
         .expect("failed to create resolver");
     let query_name = Name::from_utf8(&service.host_name).expect("invalid hostname");
 

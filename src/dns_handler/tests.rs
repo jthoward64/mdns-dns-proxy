@@ -3,7 +3,6 @@ use crate::dns_handler::utils::build_response_from_records;
 use crate::mdns_resolver::MdnsResolver;
 use hickory_proto::op::ResponseCode;
 use std::sync::Arc;
-use std::time::Duration;
 
 #[test]
 fn test_should_handle_local_domain_with_trailing_dot() {
@@ -113,7 +112,8 @@ fn test_should_handle_mixed_case_protocols() {
 
 #[test]
 fn test_dns_handler_creation() {
-    let resolver = MdnsResolver::new(Duration::from_secs(120)).unwrap();
+    let config = crate::config::Config::default();
+    let resolver = MdnsResolver::new(Arc::new(config)).unwrap();
     let handler = MdnsDnsHandler::new(Arc::new(resolver));
     
     // Test that handler correctly identifies domains

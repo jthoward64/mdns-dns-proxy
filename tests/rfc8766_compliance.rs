@@ -1,17 +1,22 @@
-use std::time::Duration;
-
 use hickory_proto::rr::{Name, Record, RecordType, RData};
-use mdns_dns_proxy::MdnsResolver;
+use mdns_dns_proxy::{Config, MdnsResolver};
 use mdns_sd::ServiceDaemon;
 use serial_test::serial;
 use std::sync::Arc;
+
+/// Create test config with specified cache TTL
+fn create_test_config(ttl_seconds: u64) -> Arc<Config> {
+    let mut config = Config::default();
+    config.cache.ttl_seconds = ttl_seconds;
+    Arc::new(config)
+}
 
 /// Test that TTLs are capped at 10 seconds per RFC 8766 Section 5.5.1
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn test_ttl_capping_at_10_seconds() {
     let daemon = Arc::new(ServiceDaemon::new().expect("failed to create daemon"));
-    let resolver = MdnsResolver::with_daemon(daemon, Duration::from_secs(120))
+    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(120))
         .expect("failed to create resolver");
     
     // Query for any record type - the TTL should be capped
@@ -34,7 +39,7 @@ async fn test_ttl_capping_at_10_seconds() {
 #[serial]
 async fn test_soa_record_compliance() {
     let daemon = Arc::new(ServiceDaemon::new().expect("failed to create daemon"));
-    let resolver = MdnsResolver::with_daemon(daemon, Duration::from_secs(5))
+    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(5))
         .expect("failed to create resolver");
     
     let query_name = Name::from_utf8("local.").expect("invalid hostname");
@@ -75,7 +80,7 @@ async fn test_soa_record_compliance() {
 #[serial]
 async fn test_ns_record_compliance() {
     let daemon = Arc::new(ServiceDaemon::new().expect("failed to create daemon"));
-    let resolver = MdnsResolver::with_daemon(daemon, Duration::from_secs(5))
+    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(5))
         .expect("failed to create resolver");
     
     let query_name = Name::from_utf8("local.").expect("invalid hostname");
@@ -159,7 +164,7 @@ async fn test_servfail_for_errors() {
 #[serial]
 async fn test_ttl_capping_all_record_types() {
     let daemon = Arc::new(ServiceDaemon::new().expect("failed to create daemon"));
-    let resolver = MdnsResolver::with_daemon(daemon, Duration::from_secs(5))
+    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(5))
         .expect("failed to create resolver");
     
     let test_cases = vec![
@@ -187,7 +192,7 @@ async fn test_ttl_capping_all_record_types() {
 #[serial]
 async fn test_soa_record_structure() {
     let daemon = Arc::new(ServiceDaemon::new().expect("failed to create daemon"));
-    let resolver = MdnsResolver::with_daemon(daemon, Duration::from_secs(5))
+    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(5))
         .expect("failed to create resolver");
     
     let query_name = Name::from_utf8("test.local.").expect("invalid hostname");
@@ -210,7 +215,7 @@ async fn test_soa_record_structure() {
 #[serial]
 async fn test_ns_record_structure() {
     let daemon = Arc::new(ServiceDaemon::new().expect("failed to create daemon"));
-    let resolver = MdnsResolver::with_daemon(daemon, Duration::from_secs(5))
+    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(5))
         .expect("failed to create resolver");
     
     let query_name = Name::from_utf8("test.local.").expect("invalid hostname");

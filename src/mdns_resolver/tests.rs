@@ -1,8 +1,17 @@
 use super::*;
 use cache::{Cache, CacheEntry};
+use crate::config::Config;
 use hickory_proto::rr::{Name, RData, Record, RecordType};
 use std::net::Ipv4Addr;
+use std::sync::Arc;
 use std::time::Duration;
+
+/// Create a test config with specified cache TTL in seconds
+fn create_test_config(ttl_seconds: u64) -> Arc<Config> {
+    let mut config = Config::default();
+    config.cache.ttl_seconds = ttl_seconds;
+    Arc::new(config)
+}
 
 fn create_test_record(name: &str, ttl: u32) -> Record {
     let name = Name::from_utf8(name).unwrap();
@@ -27,13 +36,15 @@ fn test_cache_entry_creation() {
 
 #[test]
 fn test_resolver_creation() {
-    let resolver = MdnsResolver::new(Duration::from_secs(120));
+    let config = create_test_config(120);
+    let resolver = MdnsResolver::new(config);
     assert!(resolver.is_ok());
 }
 
 #[test]
 fn test_resolver_with_custom_ttl() {
-    let resolver = MdnsResolver::new(Duration::from_secs(300)).unwrap();
+    let config = create_test_config(300);
+    let resolver = MdnsResolver::new(config).unwrap();
     assert_eq!(resolver.cache.ttl(), Duration::from_secs(300));
 }
 
@@ -136,7 +147,8 @@ fn test_query_name_parsing() {
 
 #[tokio::test]
 async fn test_unsupported_record_type_returns_empty() {
-    let resolver = MdnsResolver::new(Duration::from_secs(120)).unwrap();
+    let config = create_test_config(120);
+    let resolver = MdnsResolver::new(config).unwrap();
     let name = Name::from_utf8("test.local").unwrap();
     
     // Test unsupported record types
@@ -151,7 +163,8 @@ async fn test_unsupported_record_type_returns_empty() {
 
 #[tokio::test]
 async fn test_non_local_domain_returns_empty() {
-    let resolver = MdnsResolver::new(Duration::from_secs(120)).unwrap();
+    let config = create_test_config(120);
+    let resolver = MdnsResolver::new(config).unwrap();
     
     // Non-.local domains should return empty
     let name = Name::from_utf8("example.com").unwrap();
@@ -186,7 +199,8 @@ fn test_cache_entry_debug() {
 
 #[tokio::test]
 async fn test_query_with_cache() {
-    let resolver = MdnsResolver::new(Duration::from_secs(120)).unwrap();
+    let config = create_test_config(120);
+    let resolver = MdnsResolver::new(config).unwrap();
     let name = Name::from_utf8("test.local").unwrap();
     
     // First query (will return empty as no actual mDNS service)
@@ -202,7 +216,8 @@ async fn test_query_with_cache() {
 
 #[tokio::test]
 async fn test_query_different_record_types() {
-    let resolver = MdnsResolver::new(Duration::from_secs(120)).unwrap();
+    let config = create_test_config(120);
+    let resolver = MdnsResolver::new(config).unwrap();
     
     // Test A record query (won't find anything but should return Ok with empty vec)
     let name_a = Name::from_utf8("test.local").unwrap();
@@ -309,7 +324,8 @@ fn test_name_parsing_variations() {
 
 #[tokio::test]
 async fn test_resolver_with_very_long_ttl() {
-    let resolver = MdnsResolver::new(Duration::from_secs(86400)).unwrap(); // 24 hours
+    let config = create_test_config(86400); // 24 hours
+    let resolver = MdnsResolver::new(config).unwrap();
     let name = Name::from_utf8("test.local").unwrap();
     
     // Should still work with very long TTL
@@ -345,12 +361,15 @@ async fn test_concurrent_cache_access() {
 }
 
 #[test]
-fn test_resolver_creation_different_ttls() {
-    assert!(MdnsResolver::new(Duration::from_secs(1)).is_ok());
-    assert!(MdnsResolver::new(Duration::from_secs(60)).is_ok());
-    assert!(MdnsResolver::new(Duration::from_secs(300)).is_ok());
-    assert!(MdnsResolver::new(Duration::from_secs(3600)).is_ok());
-    assert!(MdnsResolver::new(Duration::from_millis(500)).is_ok());
+fn test_resolver_with_various_ttls() {
+    assert!(MdnsResolver::new(create_test_config(1)).is_ok());
+    assert!(MdnsResolver::new(create_test_config(60)).is_ok());
+    assert!(MdnsResolver::new(create_test_config(300)).is_ok());
+    assert!(MdnsResolver::new(create_test_config(3600)).is_ok());
+    // Sub-second TTL via config
+    let mut config = Config::default();
+    config.cache.ttl_seconds = 0; // Will be treated as milliseconds in cache
+    assert!(MdnsResolver::new(Arc::new(config)).is_ok());
 }
 
 #[tokio::test]
