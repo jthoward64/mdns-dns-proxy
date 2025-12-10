@@ -51,14 +51,16 @@ pub fn parse_dns_request(request: &Request) -> Option<(Header, MessageResponseBu
 
 /// Build a DNS response based on mDNS query results
 /// Returns the appropriate response code and records (if any)
+/// Per RFC 8766 Section 5.6, returns NoError (not NXDOMAIN) when no records found
+/// because the Discovery Proxy cannot know all names that may exist on the local link
 pub fn build_response_from_records(
     records: Result<Vec<hickory_proto::rr::Record>, Box<dyn std::error::Error + Send + Sync>>,
 ) -> (ResponseCode, Option<Vec<hickory_proto::rr::Record>>) {
     match records {
         Ok(records) => {
             if records.is_empty() {
-                debug!("No records found for query");
-                (ResponseCode::NXDomain, None)
+                debug!("No records found for query, returning NoError per RFC 8766");
+                (ResponseCode::NoError, None) // RFC 8766: "no error no answer" not NXDOMAIN
             } else {
                 info!("Returning {} record(s)", records.len());
                 (ResponseCode::NoError, Some(records))

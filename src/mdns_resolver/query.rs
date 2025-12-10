@@ -334,6 +334,65 @@ async fn resolve_hostname_to_ipv4(
     Ok(Vec::new())
 }
 
+/// Query for SOA (Start of Authority) records per RFC 8766 Section 6.1
+pub async fn query_soa(
+    _daemon: &ServiceDaemon,
+    name: &Name,
+) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
+    use hickory_proto::rr::rdata::SOA;
+    
+    // Per RFC 8766 Section 6.1:
+    // - MNAME: host name of the Discovery Proxy device
+    // - RNAME: mailbox of the person responsible
+    // - SERIAL: MUST be zero
+    // - REFRESH: 7200, RETRY: 3600, EXPIRE: 86400 (recommended)
+    // - MINIMUM: 10 (negative caching TTL per Section 5.5.1)
+    
+    let mname = Name::from_utf8("discovery-proxy.local.")?;
+    let rname = Name::from_utf8("hostmaster.local.")?;
+    
+    let soa = SOA::new(
+        mname,
+        rname,
+        0,      // SERIAL: must be zero per RFC 8766
+        7200,   // REFRESH
+        3600,   // RETRY
+        86400,  // EXPIRE
+        10,     // MINIMUM: 10 seconds per RFC 8766 Section 5.5.1
+    );
+    
+    let record = Record::from_rdata(
+        name.clone(),
+        10, // TTL capped at 10 seconds
+        hickory_proto::rr::RData::SOA(soa),
+    );
+    
+    Ok(vec![record])
+}
+
+/// Query for NS (Name Server) records per RFC 8766 Section 6.2
+pub async fn query_ns(
+    _daemon: &ServiceDaemon,
+    name: &Name,
+) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
+    use hickory_proto::rr::rdata::NS;
+    
+    // Per RFC 8766 Section 6.2:
+    // Each Discovery Proxy returns its own NS record plus records of other proxies on the link
+    // For now, just return this proxy's NS record
+    
+    let ns_name = Name::from_utf8("discovery-proxy.local.")?;
+    let ns = NS(ns_name);
+    
+    let record = Record::from_rdata(
+        name.clone(),
+        10, // TTL capped at 10 seconds
+        hickory_proto::rr::RData::NS(ns),
+    );
+    
+    Ok(vec![record])
+}
+
 /// Resolve hostname to IPv6 addresses
 async fn resolve_hostname_to_ipv6(
     daemon: &ServiceDaemon,

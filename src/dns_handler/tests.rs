@@ -177,7 +177,8 @@ fn test_build_response_from_records_success_empty() {
 
     let (response_code, records_opt) = build_response_from_records(result);
     
-    assert_eq!(response_code, ResponseCode::NXDomain);
+    // Per RFC 8766 Section 5.6, empty responses should return NoError not NXDOMAIN
+    assert_eq!(response_code, ResponseCode::NoError);
     assert!(records_opt.is_none());
 }
 
