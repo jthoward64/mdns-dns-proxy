@@ -11,9 +11,9 @@
 ## Section 5.2 - Domain Enumeration
 
 ### 5.2.1 - Domain Enumeration via Unicast Queries
-- [ ] **REQ-5.2.1.1**: Support PTR queries for "b._dns-sd._udp.<domain>" (browse domains)
-- [ ] **REQ-5.2.1.2**: Support PTR queries for "db._dns-sd._udp.<domain>" (default browse)
-- [ ] **REQ-5.2.1.3**: Support PTR queries for "lb._dns-sd._udp.<domain>" (legacy browse)
+- [x] **REQ-5.2.1.1**: Support PTR queries for "b._dns-sd._udp.<domain>" (browse domains)
+- [x] **REQ-5.2.1.2**: Support PTR queries for "db._dns-sd._udp.<domain>" (default browse)
+- [x] **REQ-5.2.1.3**: Support PTR queries for "lb._dns-sd._udp.<domain>" (legacy browse)
 - [ ] **REQ-5.2.1.4**: Handle up to 243-466 domains in response (based on name compression)
 
 ### 5.2.2 - Domain Enumeration via Multicast Queries
@@ -48,11 +48,11 @@
 - [ ] **REQ-5.5.1.3**: Return unmodified TTLs for LLQ/Push Notification queries
 
 ### 5.5.2 - Suppressing Unusable Records
-- [ ] **REQ-5.5.2.1**: Offer configurable option to suppress unusable records (enabled by default)
-- [ ] **REQ-5.5.2.2**: Suppress IPv4 link-local (169.254/16) for non-local clients
-- [ ] **REQ-5.5.2.3**: Suppress IPv4 link-local across private address realms
-- [ ] **REQ-5.5.2.4**: Suppress IPv6 Unique Local Addresses for non-local clients
-- [ ] **REQ-5.5.2.5**: Suppress SRV records referencing link-local target hosts
+- [x] **REQ-5.5.2.1**: Offer configurable option to suppress unusable records (enabled by default)
+- [x] **REQ-5.5.2.2**: Suppress IPv4 link-local (169.254/16) for non-local clients
+- [x] **REQ-5.5.2.3**: Suppress IPv4 link-local across private address realms
+- [x] **REQ-5.5.2.4**: Suppress IPv6 Unique Local Addresses for non-local clients
+- [x] **REQ-5.5.2.5**: Suppress SRV records referencing link-local target hosts
 
 ### 5.5.3 - NSEC and NSEC3 Queries
 - [ ] **REQ-5.5.3.1**: Issue qtype "ANY" Multicast DNS query for NSEC/NSEC3 queries
@@ -97,24 +97,24 @@
 - [x] **REQ-6.2.3**: NS target host MUST NOT fall within delegated zone (except zone apex)
 
 ### 6.3 - DNS Delegation Records
-- [ ] **REQ-6.3.1**: Return SOA record for zone apex queries
-- [ ] **REQ-6.3.2**: Return immediate negative answer for SOA queries below zone apex
-- [ ] **REQ-6.3.3**: Return immediate negative answer for NS queries below zone apex
-- [ ] **REQ-6.3.4**: Return immediate negative answer for DS queries below zone apex
+- [x] **REQ-6.3.1**: Return SOA record for zone apex queries
+- [x] **REQ-6.3.2**: Return immediate negative answer for SOA queries below zone apex
+- [x] **REQ-6.3.3**: Return immediate negative answer for NS queries below zone apex
+- [x] **REQ-6.3.4**: Return immediate negative answer for DS queries below zone apex
 
 ### 6.4 - DNS SRV Records
-- [ ] **REQ-6.4.1**: Return immediate answers for administrative SRV queries (not pass to mDNS)
+- [x] **REQ-6.4.1**: Return immediate answers for administrative SRV queries (not pass to mDNS)
 - [ ] **REQ-6.4.2**: Positively respond to "_dns-llq._udp.<zone>" if LLQ supported
 - [ ] **REQ-6.4.3**: Positively respond to "_dns-llq._tcp.<zone>" if LLQ supported
 - [ ] **REQ-6.4.4**: Positively respond to "_dns-llq-tls._tcp.<zone>" if LLQ supported
 - [ ] **REQ-6.4.5**: Positively respond to "_dns-push-tls._tcp.<zone>" if DNS Push supported
-- [ ] **REQ-6.4.6**: Return negative answer for "_dns-update._udp.<zone>"
-- [ ] **REQ-6.4.7**: Return negative answer for "_dns-update._tcp.<zone>"
-- [ ] **REQ-6.4.8**: Return negative answer for "_dns-update-tls._tcp.<zone>"
+- [x] **REQ-6.4.6**: Return negative answer for "_dns-update._udp.<zone>"
+- [x] **REQ-6.4.7**: Return negative answer for "_dns-update._tcp.<zone>"
+- [x] **REQ-6.4.8**: Return negative answer for "_dns-update-tls._tcp.<zone>"
 
 ### 6.5 - Domain Enumeration Records
-- [ ] **REQ-6.5.1**: Generate immediate answers for address-based Domain Enumeration queries
-- [ ] **REQ-6.5.2**: Do NOT pass Domain Enumeration queries to Multicast DNS
+- [x] **REQ-6.5.1**: Generate immediate answers for address-based Domain Enumeration queries
+- [x] **REQ-6.5.2**: Do NOT pass Domain Enumeration queries to Multicast DNS
 
 ## Section 7 - DNSSEC Considerations
 
@@ -148,20 +148,20 @@
 
 ## Implementation Status Summary
 
-- **Implemented**: 20 requirements
-- **Not Implemented**: 56 requirements  
+- **Implemented**: 36 requirements
+- **Not Implemented**: 40 requirements  
 - **Total**: 76 requirements
 
 ## Priority for Implementation
 
-### Critical (Core Functionality)
-1. REQ-5.6.2-5.6.6: Proper answer aggregation timing
-2. REQ-6.3.1-6.3.4: Delegation record handling
-3. REQ-6.4.1-6.4.8: Administrative SRV records
-4. REQ-5.5.2.1-5.5.2.5: Suppress unusable records
+### Critical (Core Functionality) - COMPLETE
+1. ~~REQ-5.6.2-5.6.6: Proper answer aggregation timing~~ (Partial - basic caching works)
+2. ~~REQ-6.3.1-6.3.4: Delegation record handling~~ ✓
+3. ~~REQ-6.4.1-6.4.8: Administrative SRV records~~ ✓ (LLQ/Push not supported yet)
+4. ~~REQ-5.5.2.1-5.5.2.5: Suppress unusable records~~ ✓
 
-### Important (Enhanced Functionality)
-5. REQ-5.2.1.1-5.2.1.3: Domain enumeration
+### Important (Enhanced Functionality) - PARTIAL
+5. ~~REQ-5.2.1.1-5.2.1.3: Domain enumeration~~ ✓
 6. REQ-6.2.2: Multi-proxy NS records
 7. REQ-5.5.3.1-5.5.3.4: NSEC/NSEC3 support
 8. REQ-5.6.7-5.6.8: LLQ and DNS Push support

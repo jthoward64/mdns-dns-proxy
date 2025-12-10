@@ -235,3 +235,285 @@ async fn test_ns_record_structure() {
         panic!("Expected NS record");
     }
 }
+
+// ============================================================================
+// RFC 8766 Section 5.2.1 - Domain Enumeration via Unicast Queries
+// ============================================================================
+
+/// Test domain enumeration query detection (REQ-5.2.1.1-5.2.1.3)
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn test_domain_enumeration_query_detection() {
+    use mdns_dns_proxy::dns_handler::admin_records::is_domain_enumeration_query;
+    
+    // Browse domains query (b._dns-sd._udp)
+    let name = Name::from_utf8("b._dns-sd._udp.local.").expect("invalid name");
+    assert!(
+        is_domain_enumeration_query(&name, RecordType::PTR),
+        "b._dns-sd._udp.local. should be recognized as domain enumeration query"
+    );
+    
+    // Default browse domain query (db._dns-sd._udp)
+    let name = Name::from_utf8("db._dns-sd._udp.local.").expect("invalid name");
+    assert!(
+        is_domain_enumeration_query(&name, RecordType::PTR),
+        "db._dns-sd._udp.local. should be recognized as domain enumeration query"
+    );
+    
+    // Legacy browse domain query (lb._dns-sd._udp)
+    let name = Name::from_utf8("lb._dns-sd._udp.local.").expect("invalid name");
+    assert!(
+        is_domain_enumeration_query(&name, RecordType::PTR),
+        "lb._dns-sd._udp.local. should be recognized as domain enumeration query"
+    );
+    
+    // Regular service query should not be domain enumeration
+    let name = Name::from_utf8("_http._tcp.local.").expect("invalid name");
+    assert!(
+        !is_domain_enumeration_query(&name, RecordType::PTR),
+        "_http._tcp.local. should NOT be recognized as domain enumeration query"
+    );
+}
+
+// ============================================================================
+// RFC 8766 Section 6.3 - DNS Delegation Records
+// ============================================================================
+
+/// Test delegation query detection below zone apex (REQ-6.3.2-6.3.4)
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn test_delegation_query_below_apex() {
+    use mdns_dns_proxy::dns_handler::admin_records::is_delegation_query_below_apex;
+    
+    let apex = Name::from_utf8("local.").expect("invalid name");
+    
+    // SOA query below apex should return true (REQ-6.3.2)
+    let name = Name::from_utf8("test.local.").expect("invalid name");
+    assert!(
+        is_delegation_query_below_apex(&name, RecordType::SOA, &apex),
+        "SOA query below zone apex should be detected"
+    );
+    
+    // NS query below apex should return true (REQ-6.3.3)
+    assert!(
+        is_delegation_query_below_apex(&name, RecordType::NS, &apex),
+        "NS query below zone apex should be detected"
+    );
+    
+    // DS query below apex should return true (REQ-6.3.4)
+    assert!(
+        is_delegation_query_below_apex(&name, RecordType::DS, &apex),
+        "DS query below zone apex should be detected"
+    );
+    
+    // Query at apex should return false
+    let name = Name::from_utf8("local.").expect("invalid name");
+    assert!(
+        !is_delegation_query_below_apex(&name, RecordType::SOA, &apex),
+        "SOA query at zone apex should NOT be detected as below apex"
+    );
+    
+    // A query should return false regardless of position
+    let name = Name::from_utf8("test.local.").expect("invalid name");
+    assert!(
+        !is_delegation_query_below_apex(&name, RecordType::A, &apex),
+        "A query should NOT be detected as delegation query"
+    );
+}
+
+// ============================================================================
+// RFC 8766 Section 6.4 - DNS SRV Records
+// ============================================================================
+
+/// Test administrative SRV query detection (REQ-6.4.1-6.4.8)
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn test_admin_srv_query_detection() {
+    use mdns_dns_proxy::dns_handler::admin_records::{is_admin_srv_query, is_negative_admin_srv_query};
+    
+    // LLQ SRV queries (REQ-6.4.2-6.4.4)
+    let name = Name::from_utf8("_dns-llq._udp.local.").expect("invalid name");
+    assert!(
+        is_admin_srv_query(&name, RecordType::SRV),
+        "_dns-llq._udp should be recognized as admin SRV query"
+    );
+    
+    let name = Name::from_utf8("_dns-llq._tcp.local.").expect("invalid name");
+    assert!(
+        is_admin_srv_query(&name, RecordType::SRV),
+        "_dns-llq._tcp should be recognized as admin SRV query"
+    );
+    
+    let name = Name::from_utf8("_dns-llq-tls._tcp.local.").expect("invalid name");
+    assert!(
+        is_admin_srv_query(&name, RecordType::SRV),
+        "_dns-llq-tls._tcp should be recognized as admin SRV query"
+    );
+    
+    // DNS Push SRV query (REQ-6.4.5)
+    let name = Name::from_utf8("_dns-push-tls._tcp.local.").expect("invalid name");
+    assert!(
+        is_admin_srv_query(&name, RecordType::SRV),
+        "_dns-push-tls._tcp should be recognized as admin SRV query"
+    );
+    
+    // DNS Update SRV queries - should be negative (REQ-6.4.6-6.4.8)
+    let name = Name::from_utf8("_dns-update._udp.local.").expect("invalid name");
+    assert!(
+        is_admin_srv_query(&name, RecordType::SRV),
+        "_dns-update._udp should be recognized as admin SRV query"
+    );
+    assert!(
+        is_negative_admin_srv_query(&name),
+        "_dns-update._udp should return negative response"
+    );
+    
+    let name = Name::from_utf8("_dns-update._tcp.local.").expect("invalid name");
+    assert!(
+        is_negative_admin_srv_query(&name),
+        "_dns-update._tcp should return negative response"
+    );
+    
+    let name = Name::from_utf8("_dns-update-tls._tcp.local.").expect("invalid name");
+    assert!(
+        is_negative_admin_srv_query(&name),
+        "_dns-update-tls._tcp should return negative response"
+    );
+    
+    // Regular service SRV query should NOT be admin
+    let name = Name::from_utf8("_http._tcp.local.").expect("invalid name");
+    assert!(
+        !is_admin_srv_query(&name, RecordType::SRV),
+        "_http._tcp should NOT be recognized as admin SRV query"
+    );
+}
+
+// ============================================================================
+// RFC 8766 Section 5.5.2 - Suppressing Unusable Records
+// ============================================================================
+
+/// Test IPv4 link-local detection (REQ-5.5.2.2)
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn test_ipv4_link_local_detection() {
+    use mdns_dns_proxy::dns_handler::admin_records::is_ipv4_link_local;
+    use std::net::Ipv4Addr;
+    
+    // Link-local addresses (169.254/16)
+    assert!(is_ipv4_link_local(&Ipv4Addr::new(169, 254, 0, 1)));
+    assert!(is_ipv4_link_local(&Ipv4Addr::new(169, 254, 255, 255)));
+    assert!(is_ipv4_link_local(&Ipv4Addr::new(169, 254, 100, 50)));
+    
+    // Non-link-local addresses
+    assert!(!is_ipv4_link_local(&Ipv4Addr::new(192, 168, 1, 1)));
+    assert!(!is_ipv4_link_local(&Ipv4Addr::new(10, 0, 0, 1)));
+    assert!(!is_ipv4_link_local(&Ipv4Addr::new(172, 16, 0, 1)));
+    assert!(!is_ipv4_link_local(&Ipv4Addr::new(8, 8, 8, 8)));
+}
+
+/// Test IPv6 ULA detection (REQ-5.5.2.4)
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn test_ipv6_ula_detection() {
+    use mdns_dns_proxy::dns_handler::admin_records::is_ipv6_ula;
+    
+    // ULA addresses (fc00::/7 = fc00:: to fdff::)
+    assert!(is_ipv6_ula(&"fc00::1".parse().unwrap()));
+    assert!(is_ipv6_ula(&"fd00::1".parse().unwrap()));
+    assert!(is_ipv6_ula(&"fd12:3456:789a::1".parse().unwrap()));
+    
+    // Non-ULA addresses
+    assert!(!is_ipv6_ula(&"2001:db8::1".parse().unwrap()));
+    assert!(!is_ipv6_ula(&"fe80::1".parse().unwrap()));
+    assert!(!is_ipv6_ula(&"::1".parse().unwrap()));
+}
+
+/// Test IPv6 link-local detection
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn test_ipv6_link_local_detection() {
+    use mdns_dns_proxy::dns_handler::admin_records::is_ipv6_link_local;
+    
+    // Link-local addresses (fe80::/10)
+    assert!(is_ipv6_link_local(&"fe80::1".parse().unwrap()));
+    assert!(is_ipv6_link_local(&"fe80::1234:5678:abcd:ef01".parse().unwrap()));
+    
+    // Non-link-local addresses
+    assert!(!is_ipv6_link_local(&"2001:db8::1".parse().unwrap()));
+    assert!(!is_ipv6_link_local(&"fc00::1".parse().unwrap()));
+    assert!(!is_ipv6_link_local(&"::1".parse().unwrap()));
+}
+
+/// Test record suppression configuration (REQ-5.5.2.1)
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn test_record_suppression_config() {
+    use mdns_dns_proxy::dns_handler::admin_records::{RecordSuppressionConfig, should_suppress_address_record};
+    use hickory_proto::rr::rdata::A;
+    use std::net::{IpAddr, Ipv4Addr};
+    
+    let name = Name::from_utf8("test.local.").expect("invalid name");
+    let link_local_record = Record::from_rdata(
+        name.clone(),
+        10,
+        RData::A(A::from(Ipv4Addr::new(169, 254, 1, 1))),
+    );
+    
+    // With suppression disabled, link-local should NOT be suppressed
+    let config = RecordSuppressionConfig {
+        enabled: false,
+        client_ip: Some(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))),
+    };
+    assert!(
+        !should_suppress_address_record(&link_local_record, &config),
+        "Link-local should NOT be suppressed when suppression is disabled"
+    );
+    
+    // With suppression enabled and remote client, link-local SHOULD be suppressed
+    let config = RecordSuppressionConfig {
+        enabled: true,
+        client_ip: Some(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))),
+    };
+    assert!(
+        should_suppress_address_record(&link_local_record, &config),
+        "Link-local SHOULD be suppressed for remote client"
+    );
+    
+    // Regular private IP should NOT be suppressed
+    let private_record = Record::from_rdata(
+        name,
+        10,
+        RData::A(A::from(Ipv4Addr::new(192, 168, 1, 1))),
+    );
+    assert!(
+        !should_suppress_address_record(&private_record, &config),
+        "Private IP should NOT be suppressed"
+    );
+}
+
+// ============================================================================
+// RFC 8766 Section 6.5 - Domain Enumeration Records
+// ============================================================================
+
+/// Test domain enumeration record generation (REQ-6.5.1)
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn test_domain_enumeration_record_generation() {
+    use mdns_dns_proxy::dns_handler::admin_records::generate_domain_enumeration_records;
+    
+    let query_name = Name::from_utf8("b._dns-sd._udp.local.").expect("invalid name");
+    let apex = Name::from_utf8("local.").expect("invalid name");
+    
+    let records = generate_domain_enumeration_records(&query_name, &apex);
+    
+    assert_eq!(records.len(), 1, "Should return one PTR record");
+    
+    let ptr_record = &records[0];
+    assert_eq!(ptr_record.name(), &query_name);
+    
+    if let RData::PTR(ptr) = ptr_record.data() {
+        assert_eq!(ptr.0, apex, "PTR should point to the zone apex");
+    } else {
+        panic!("Expected PTR record");
+    }
+}
