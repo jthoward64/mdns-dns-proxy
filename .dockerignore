@@ -1,0 +1,46 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+
+# Build artifacts
+target/
+!target/x86_64-unknown-linux-musl/release/mdns-dns-proxy
+
+# Documentation
+*.md
+!README.md
+docs/
+RFC*.md
+rfc*.txt
+
+# Test files
+tests/
+TESTING*.md
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Rust
+**/*.rs.bk
+Cargo.lock
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# AUR and systemd
+PKGBUILD
+*.service
+
+# Config (keeping example)
+config.toml
+!config.example.toml

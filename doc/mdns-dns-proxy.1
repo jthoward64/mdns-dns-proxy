@@ -1,0 +1,134 @@
+.TH MDNS-DNS-PROXY 1 "December 2025" "mdns-dns-proxy 0.1.0" "User Commands"
+.SH NAME
+mdns-dns-proxy \- DNS server that resolves .local domains using mDNS
+.SH SYNOPSIS
+.B mdns-dns-proxy
+[\fIOPTION\fR]...
+.SH DESCRIPTION
+.B mdns-dns-proxy
+is a DNS server that proxies queries for .local domains to mDNS (Multicast DNS).
+It allows standard DNS clients to resolve hostnames advertised via mDNS/Bonjour
+without requiring mDNS support in the client application.
+.PP
+The server listens for DNS queries on a configurable address and port, then
+translates .local domain queries into mDNS queries on the local network.
+Results are cached for improved performance.
+.SH OPTIONS
+.TP
+.BR \-c ", " \-\-config " " \fIPATH\fR
+Path to configuration file in TOML format.
+Can also be set via \fBMDNS_DNS_PROXY_CONFIG\fR environment variable.
+.TP
+.BR \-b ", " \-\-bind\-address " " \fIADDRESS\fR
+IP address to bind the DNS server to. Default: 127.0.0.1
+Can also be set via \fBMDNS_DNS_PROXY_BIND_ADDRESS\fR environment variable.
+.TP
+.BR \-p ", " \-\-port " " \fIPORT\fR
+Port to bind the DNS server to. Default: 5335
+Can also be set via \fBMDNS_DNS_PROXY_PORT\fR environment variable.
+.TP
+.BR \-\-cache\-ttl " " \fISECONDS\fR
+Cache TTL (time-to-live) in seconds. Default: 120
+Can also be set via \fBMDNS_DNS_PROXY_CACHE_TTL\fR environment variable.
+.TP
+.BR \-\-no\-cache
+Disable result caching.
+Can also be set via \fBMDNS_DNS_PROXY_NO_CACHE\fR environment variable.
+.TP
+.BR \-l ", " \-\-log\-level " " \fILEVEL\fR
+Set log level: trace, debug, info, warn, error. Default: info
+Can also be set via \fBMDNS_DNS_PROXY_LOG_LEVEL\fR environment variable.
+.TP
+.BR \-\-service\-query\-timeout " " \fIMILLISECONDS\fR
+Timeout for service discovery queries (PTR/SRV/TXT) in milliseconds. Default: 1000
+Can also be set via \fBMDNS_DNS_PROXY_SERVICE_QUERY_TIMEOUT\fR environment variable.
+.TP
+.BR \-\-hostname\-resolution\-timeout " " \fIMILLISECONDS\fR
+Timeout for hostname resolution (A/AAAA) queries in milliseconds. Default: 1000
+Can also be set via \fBMDNS_DNS_PROXY_HOSTNAME_RESOLUTION_TIMEOUT\fR environment variable.
+.TP
+.BR \-\-print\-example\-config
+Print an example configuration file with defaults and exit.
+.TP
+.BR \-h ", " \-\-help
+Print help information.
+.TP
+.BR \-V ", " \-\-version
+Print version information.
+.SH CONFIGURATION FILE
+Configuration can be provided via a TOML file specified with \fB\-c\fR/\fB\-\-config\fR.
+Command-line arguments and environment variables override configuration file settings.
+.PP
+See \fBmdns-dns-proxy.toml\fR(5) for configuration file format details.
+.SH ENVIRONMENT
+.TP
+.B MDNS_DNS_PROXY_CONFIG
+Path to configuration file
+.TP
+.B MDNS_DNS_PROXY_BIND_ADDRESS
+IP address to bind to
+.TP
+.B MDNS_DNS_PROXY_PORT
+Port to bind to
+.TP
+.B MDNS_DNS_PROXY_CACHE_TTL
+Cache TTL in seconds
+.TP
+.B MDNS_DNS_PROXY_NO_CACHE
+Disable caching (set to any value)
+.TP
+.B MDNS_DNS_PROXY_LOG_LEVEL
+Log level
+.TP
+.B MDNS_DNS_PROXY_SERVICE_QUERY_TIMEOUT
+Service query timeout in milliseconds
+.TP
+.B MDNS_DNS_PROXY_HOSTNAME_RESOLUTION_TIMEOUT
+Hostname resolution timeout in milliseconds
+.SH EXAMPLES
+.PP
+Start with default settings (localhost:5335):
+.PP
+.nf
+.RS
+mdns-dns-proxy
+.RE
+.fi
+.PP
+Bind to all interfaces on port 53 (requires root):
+.PP
+.nf
+.RS
+sudo mdns-dns-proxy \-b 0.0.0.0 \-p 53
+.RE
+.fi
+.PP
+Use configuration file:
+.PP
+.nf
+.RS
+mdns-dns-proxy \-c /etc/mdns-dns-proxy/config.toml
+.RE
+.fi
+.PP
+Enable debug logging:
+.PP
+.nf
+.RS
+mdns-dns-proxy \-l debug
+.RE
+.fi
+.SH FILES
+.TP
+.I /etc/mdns-dns-proxy/config.toml
+System-wide configuration file
+.SH SEE ALSO
+.BR mdns-dns-proxy.toml (5)
+.PP
+RFC 6762 - Multicast DNS
+.br
+RFC 8766 - Discovery Proxy for Multicast DNS-Based Service Discovery
+.SH AUTHOR
+Written by jthoward64.
+.SH BUGS
+Report bugs at: https://github.com/jthoward64/mdns-dns-proxy/issues

@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  mdns-dns-proxy:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        MDNS_DNS_PROXY_PORT: ${MDNS_DNS_PROXY_PORT:-5335}
+    image: mdns-dns-proxy:latest
+    container_name: mdns-dns-proxy
+    restart: unless-stopped
+    
+    # Network mode host is required for mDNS to work properly
+    network_mode: host
+    
+    environment:
+      # Server configuration
+      MDNS_DNS_PROXY_BIND_ADDRESS: ${MDNS_DNS_PROXY_BIND_ADDRESS:-0.0.0.0}
+      MDNS_DNS_PROXY_PORT: ${MDNS_DNS_PROXY_PORT:-5335}
+      
+      # Cache configuration
+      MDNS_DNS_PROXY_CACHE_TTL: ${MDNS_DNS_PROXY_CACHE_TTL:-120}
+      MDNS_DNS_PROXY_NO_CACHE: ${MDNS_DNS_PROXY_NO_CACHE:-false}
+      
+      # Logging configuration
+      MDNS_DNS_PROXY_LOG_LEVEL: ${MDNS_DNS_PROXY_LOG_LEVEL:-info}
+      
+      # mDNS query configuration
+      MDNS_DNS_PROXY_SERVICE_QUERY_TIMEOUT: ${MDNS_DNS_PROXY_SERVICE_QUERY_TIMEOUT:-1000}
+      MDNS_DNS_PROXY_HOSTNAME_RESOLUTION_TIMEOUT: ${MDNS_DNS_PROXY_HOSTNAME_RESOLUTION_TIMEOUT:-1000}
+    
+    # No volumes needed since we're using env vars instead of config file

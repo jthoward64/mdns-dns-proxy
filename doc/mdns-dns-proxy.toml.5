@@ -1,0 +1,143 @@
+.TH MDNS-DNS-PROXY.TOML 5 "December 2025" "mdns-dns-proxy 0.1.0" "File Formats"
+.SH NAME
+mdns-dns-proxy.toml \- configuration file for mdns-dns-proxy
+.SH SYNOPSIS
+.I /etc/mdns-dns-proxy/config.toml
+.br
+.I ~/.config/mdns-dns-proxy/config.toml
+.SH DESCRIPTION
+The
+.B mdns-dns-proxy.toml
+file configures the behavior of the mdns-dns-proxy DNS server.
+The file uses TOML format and is organized into sections.
+All settings are optional and have sensible defaults.
+.SH FILE FORMAT
+.SS [server]
+Server configuration section.
+.TP
+.B bind_address
+IP address to bind the DNS server to.
+.br
+Type: string (IP address)
+.br
+Default: "127.0.0.1"
+.br
+Example: "0.0.0.0" (all interfaces)
+.TP
+.B port
+Port to bind the DNS server to.
+.br
+Type: integer
+.br
+Default: 5335
+.br
+Note: Ports below 1024 require root privileges
+.TP
+.B tcp_timeout
+TCP connection timeout in seconds.
+.br
+Type: integer
+.br
+Default: 30
+.SS [cache]
+Cache configuration section.
+.TP
+.B ttl_seconds
+How long to cache mDNS query results in seconds.
+.br
+Type: integer
+.br
+Default: 120
+.TP
+.B enabled
+Enable or disable result caching.
+.br
+Type: boolean
+.br
+Default: true
+.SS [logging]
+Logging configuration section.
+.TP
+.B level
+Log level for the application.
+.br
+Type: string
+.br
+Options: "trace", "debug", "info", "warn", "error"
+.br
+Default: "info"
+.SS [mdns]
+mDNS query configuration section.
+.TP
+.B service_query_timeout_ms
+Timeout for service discovery queries (PTR/SRV/TXT) in milliseconds.
+.br
+Type: integer
+.br
+Default: 1000
+.TP
+.B service_discovery_timeout_ms
+Timeout for _services._dns-sd._udp.local. discovery in milliseconds.
+.br
+Type: integer
+.br
+Default: 2000
+.TP
+.B service_poll_interval_ms
+Per-event poll timeout during service queries in milliseconds.
+.br
+Type: integer
+.br
+Default: 100
+.TP
+.B hostname_resolution_timeout_ms
+Timeout for hostname resolution (A/AAAA) queries in milliseconds.
+.br
+Type: integer
+.br
+Default: 1000
+.SH EXAMPLE
+.nf
+# mDNS-DNS Discovery Proxy Configuration
+
+[server]
+bind_address = "0.0.0.0"
+port = 5335
+tcp_timeout = 30
+
+[cache]
+ttl_seconds = 120
+enabled = true
+
+[logging]
+level = "info"
+
+[mdns]
+service_query_timeout_ms = 1000
+service_discovery_timeout_ms = 2000
+service_poll_interval_ms = 100
+hostname_resolution_timeout_ms = 1000
+.fi
+.SH PRIORITY
+Configuration precedence (highest to lowest):
+.IP 1. 4
+Command-line arguments
+.IP 2. 4
+Environment variables
+.IP 3. 4
+Configuration file
+.IP 4. 4
+Built-in defaults
+.SH FILES
+.TP
+.I /etc/mdns-dns-proxy/config.toml
+System-wide configuration file
+.TP
+.I ~/.config/mdns-dns-proxy/config.toml
+User-specific configuration file
+.SH SEE ALSO
+.BR mdns-dns-proxy (1)
+.SH AUTHOR
+Written by jthoward64.
+.SH BUGS
+Report bugs at: https://github.com/jthoward64/mdns-dns-proxy/issues
