@@ -4,18 +4,31 @@ FROM rust:1-alpine AS builder
 # Install build dependencies
 RUN apk add --no-cache musl-dev
 
+# Set target architecture based on platform
+ARG TARGETPLATFORM
+RUN case "$TARGETPLATFORM" in \
+        "linux/amd64") echo "x86_64-unknown-linux-musl" > /tmp/rust-target ;; \
+        "linux/arm64") echo "aarch64-unknown-linux-musl" > /tmp/rust-target ;; \
+        *) echo "Unsupported platform: $TARGETPLATFORM" && exit 1 ;; \
+    esac
+
+# Install the target
+RUN rustup target add $(cat /tmp/rust-target)
+
 # Create app directory
 WORKDIR /usr/src/mdns-dns-proxy
 
 # Copy manifests
-COPY Cargo.toml Cargo.lock* ./
+COPY Cargo.toml Cargo.lock .
 
 # Copy source tree
 COPY src ./src
 
 # Build for release with static linking
-RUN cargo build --release --target x86_64-unknown-linux-musl && \
-    strip target/x86_64-unknown-linux-musl/release/mdns-dns-proxy
+RUN RUST_TARGET=$(cat /tmp/rust-target) && \
+    cargo build --release --target $RUST_TARGET && \
+    strip target/$RUST_TARGET/release/mdns-dns-proxy && \
+    cp target/$RUST_TARGET/release/mdns-dns-proxy /usr/local/bin/mdns-dns-proxy
 
 # Runtime stage
 FROM alpine:latest
@@ -25,7 +38,7 @@ RUN addgroup -g 1000 mdns && \
     adduser -D -u 1000 -G mdns mdns
 
 # Copy the binary from builder
-COPY --from=builder /usr/src/mdns-dns-proxy/target/x86_64-unknown-linux-musl/release/mdns-dns-proxy /usr/local/bin/mdns-dns-proxy
+COPY --from=builder /usr/local/bin/mdns-dns-proxy /usr/local/bin/mdns-dns-proxy
 
 # Create directory for runtime files
 RUN mkdir -p /var/lib/mdns-dns-proxy && \

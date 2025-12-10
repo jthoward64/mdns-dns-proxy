@@ -30,7 +30,6 @@ TESTING*.md
 
 # Rust
 **/*.rs.bk
-Cargo.lock
 
 # Docker
 Dockerfile
