@@ -20,9 +20,6 @@ RUN cargo build --release --target x86_64-unknown-linux-musl && \
 # Runtime stage
 FROM alpine:latest
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates
-
 # Create a non-root user
 RUN addgroup -g 1000 mdns && \
     adduser -D -u 1000 -G mdns mdns
