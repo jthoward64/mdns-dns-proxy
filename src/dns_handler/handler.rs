@@ -73,27 +73,15 @@ impl MdnsDnsHandler {
             return Some(vec![generate_soa_record(name)]);
         }
 
-        // REQ-6.3.2: SOA query below zone apex - immediate negative answer
-        if is_delegation_query_below_apex(name, RecordType::SOA, &self.zone_apex) {
-            debug!("SOA query below zone apex, returning empty");
-            return Some(Vec::new());
-        }
-
         // REQ-6.2.1: Zone apex NS query
         if record_type == RecordType::NS && is_zone_apex_query(name, &self.zone_apex) {
             info!("Handling zone apex NS query");
             return Some(vec![generate_ns_record(name)]);
         }
 
-        // REQ-6.3.3: NS query below zone apex - immediate negative answer
-        if is_delegation_query_below_apex(name, RecordType::NS, &self.zone_apex) {
-            debug!("NS query below zone apex, returning empty");
-            return Some(Vec::new());
-        }
-
-        // REQ-6.3.4: DS query below zone apex - immediate negative answer
-        if is_delegation_query_below_apex(name, RecordType::DS, &self.zone_apex) {
-            debug!("DS query below zone apex, returning empty");
+        // REQ-6.3.2-4: NS/DS/SOA query below zone apex - immediate negative answer
+        if is_delegation_query_below_apex(name, record_type, &self.zone_apex) {
+            debug!("NS/DS/SOA query below zone apex, returning empty");
             return Some(Vec::new());
         }
 
