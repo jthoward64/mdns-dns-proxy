@@ -10,10 +10,10 @@ pub async fn query_a_aaaa(
     name: &Name,
     config: &Config,
 ) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
-    let hostname = name.to_utf8();
+    let hostname = name.to_utf8().to_lowercase();
 
     // Check if this is a .local query
-    if !hostname.ends_with(".local.") && !hostname.ends_with(".local") {
+    if hostname.strip_suffix(".").unwrap_or(&hostname).split(".").last().unwrap_or("") != "local" {
         return Ok(Vec::new());
     }
 
@@ -231,7 +231,6 @@ async fn resolve_hostname(
     ) {
         let now = std::time::Instant::now();
         let deadline = now + config.hostname_resolution_timeout();
-        let poll_interval = config.service_poll_interval();
 
         loop {
             // Wait for the smaller of poll_interval or the remaining time
@@ -239,16 +238,15 @@ async fn resolve_hostname(
             if remaining.is_zero() {
                 break;
             }
-            let wait_for = std::cmp::min(poll_interval, remaining);
 
-            match timeout(wait_for, receiver.recv_async()).await {
-                Ok(Ok(HostnameResolutionEvent::SearchStarted(_))) => {
+            match receiver.recv_async().await {
+                Ok(HostnameResolutionEvent::SearchStarted(_)) => {
                     debug!("Hostname resolution started for {}", hostname);
                 }
-                Ok(Ok(HostnameResolutionEvent::SearchStopped(_))) => {
+                Ok(HostnameResolutionEvent::SearchStopped(_)) => {
                     debug!("Hostname resolution stopped for {}", hostname);
                 }
-                Ok(Ok(HostnameResolutionEvent::AddressesFound(_, addresses))) => {
+                Ok(HostnameResolutionEvent::AddressesFound(_, addresses)) => {
                     for addr in addresses {
                         match addr {
                             mdns_sd::ScopedIp::V4(ipv4) => {
@@ -279,7 +277,7 @@ async fn resolve_hostname(
                         }
                     }
                 }
-                Ok(Ok(HostnameResolutionEvent::AddressesRemoved(_, addresses))) => {
+                Ok(HostnameResolutionEvent::AddressesRemoved(_, addresses)) => {
                     for addr in addresses {
                         // Remove matching records from the results
                         records.retain(|record| match &addr {
@@ -299,17 +297,17 @@ async fn resolve_hostname(
                             }
                             _ => true,
                         });
-                        debug!("Removed address from results for {}: {:?}", hostname, addr);
+                        debug!("Removed address from results for {}: {:?} after {}", hostname, addr, config.hostname_resolution_timeout().as_secs_f32());
                     }
                 }
-                Err(_) | Ok(Ok(HostnameResolutionEvent::SearchTimeout(_))) => {
+                Ok(HostnameResolutionEvent::SearchTimeout(_)) => {
                     debug!("Hostname resolution timed out for {}", hostname);
                     break;
                 }
-                Ok(Err(e)) => {
-                    error!("Error 2 during hostname resolution for {}: {}", hostname, e);
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Error during hostname resolution for {}: {}", hostname, e);
                 }
-                _ => {}
             }
         }
     }

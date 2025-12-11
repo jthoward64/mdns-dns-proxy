@@ -8,7 +8,7 @@ pub fn should_handle_domain(name: &str) -> bool {
     let name_lower = name.to_lowercase();
     
     // Handle .local domain queries (RFC 8766)
-    if name_lower.ends_with(".local.") || name_lower.ends_with(".local") {
+    if name_lower.strip_suffix(".").unwrap_or(&name_lower).split(".").last().unwrap_or("") == "local" {
         return true;
     }
     

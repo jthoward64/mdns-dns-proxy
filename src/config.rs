@@ -113,7 +113,7 @@ fn default_service_poll_interval() -> u64 {
 fn default_hostname_resolution_timeout() -> u64 {
     option_env!("MDNS_DNS_PROXY_DEFAULT_HOSTNAME_RESOLUTION_TIMEOUT")
         .and_then(|s| s.parse().ok())
-        .unwrap_or(1000)
+        .unwrap_or(1500)
 }
 
 impl Default for ServerConfig {
