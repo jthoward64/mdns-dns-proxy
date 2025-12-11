@@ -1,39 +1,17 @@
-FROM rust:1-trixie AS builder
-
-# Set target architecture based on platform
-ARG TARGETPLATFORM
-RUN case "$TARGETPLATFORM" in \
-        "linux/amd64") echo "x86_64-unknown-linux-gnu" > /tmp/rust-target ;; \
-        "linux/arm64") echo "aarch64-unknown-linux-gnu" > /tmp/rust-target ;; \
-        *) echo "Unsupported platform: $TARGETPLATFORM" && exit 1 ;; \
-    esac
-
-# Install the target
-RUN rustup target add $(cat /tmp/rust-target)
-
-# Create app directory
-WORKDIR /usr/src/mdns-dns-proxy
-
-# Copy manifests
-COPY Cargo.toml Cargo.lock .
-
-# Copy source tree
-COPY src ./src
-
-# Build for release
-RUN RUST_TARGET=$(cat /tmp/rust-target) && \
-    cargo build --release --target $RUST_TARGET && \
-    cp target/$RUST_TARGET/release/mdns-dns-proxy /usr/local/bin/mdns-dns-proxy
-
-# Runtime stage
 FROM debian:trixie-slim
+
+# Target architecture is provided by buildx; defaults aid local builds
+ARG TARGETARCH=amd64
+
+# Copy in the prebuilt static binary produced by CI (musl to avoid glibc drift)
+COPY dist/mdns-dns-proxy-${TARGETARCH} /usr/local/bin/mdns-dns-proxy
 
 # Create a non-root user
 RUN groupadd -g 1000 mdns && \
     useradd -m -u 1000 -g mdns mdns
 
-# Copy the binary from builder
-COPY --from=builder /usr/local/bin/mdns-dns-proxy /usr/local/bin/mdns-dns-proxy
+# Ensure binary is executable (tarballs sometimes lose the bit)
+RUN chmod +x /usr/local/bin/mdns-dns-proxy
 
 # Switch to non-root user
 USER mdns

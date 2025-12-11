@@ -11,6 +11,7 @@ env:
 jobs:
   build-and-push-docker:
     runs-on: ubuntu-latest
+    needs: build-binaries
     strategy:
       matrix:
         include:
@@ -25,6 +26,22 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Download Linux musl artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mdns-dns-proxy-*-unknown-linux-musl
+          merge-multiple: true
+          path: dist/raw
+
+      - name: Prepare binaries for image build
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          tar -xzf dist/raw/mdns-dns-proxy-linux-amd64-musl.tar.gz -C dist
+          mv dist/mdns-dns-proxy dist/mdns-dns-proxy-amd64
+          tar -xzf dist/raw/mdns-dns-proxy-linux-arm64-musl.tar.gz -C dist
+          mv dist/mdns-dns-proxy dist/mdns-dns-proxy-arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -69,23 +86,37 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            asset_name: mdns-dns-proxy-linux-amd64
+            arch: amd64
+            asset_name: mdns-dns-proxy-linux-amd64-musl
+            use_cross: false
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            arch: arm64
+            asset_name: mdns-dns-proxy-linux-arm64-musl
+            use_cross: true
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            arch: amd64
             asset_name: mdns-dns-proxy-linux-amd64-gnu
-          # - os: ubuntu-latest
-          #   target: aarch64-unknown-linux-musl
-          #   asset_name: mdns-dns-proxy-linux-arm64
+            use_cross: false
           # - os: macos-latest
           #   target: x86_64-apple-darwin
+          #   arch: amd64
           #   asset_name: mdns-dns-proxy-macos-amd64
+          #   use_cross: false
           # - os: macos-latest
           #   target: aarch64-apple-darwin
+          #   arch: arm64
           #   asset_name: mdns-dns-proxy-macos-arm64
+          #   use_cross: false
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up QEMU (for cross builds)
+        if: matrix.use_cross == true
+        uses: docker/setup-qemu-action@v3
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -97,16 +128,23 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-          fi
+          sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu
+
+      - name: Install cross (only when needed)
+        if: matrix.use_cross == true
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross --locked
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
 
       - name: Strip binary (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && startsWith(matrix.target, 'x86_64-')
         run: strip target/${{ matrix.target }}/release/mdns-dns-proxy
 
       - name: Strip binary (macOS)
@@ -118,6 +156,12 @@ jobs:
           cd target/${{ matrix.target }}/release
           tar czf ${{ matrix.asset_name }}.tar.gz mdns-dns-proxy
           mv ${{ matrix.asset_name }}.tar.gz ../../..
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mdns-dns-proxy-${{ matrix.target }}
+          path: ${{ matrix.asset_name }}.tar.gz
 
       - name: Upload binary to release
         uses: softprops/action-gh-release@v1
