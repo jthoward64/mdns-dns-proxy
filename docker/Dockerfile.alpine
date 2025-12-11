@@ -9,7 +9,7 @@ RUN case "$TARGETPLATFORM" in \
     esac
 
 # Install build dependencies
-RUN apk add --no-cache musl-dev build-base pkgconfig
+RUN apk add --no-cache musl-dev
 
 # Install the target
 RUN rustup target add $(cat /tmp/rust-target)
