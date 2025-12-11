@@ -40,8 +40,8 @@ jobs:
           mkdir -p dist
           tar -xzf dist/raw/mdns-dns-proxy-linux-amd64-musl.tar.gz -C dist
           mv dist/mdns-dns-proxy dist/mdns-dns-proxy-amd64
-          tar -xzf dist/raw/mdns-dns-proxy-linux-arm64-musl.tar.gz -C dist
-          mv dist/mdns-dns-proxy dist/mdns-dns-proxy-arm64
+          # tar -xzf dist/raw/mdns-dns-proxy-linux-arm64-musl.tar.gz -C dist
+          # mv dist/mdns-dns-proxy dist/mdns-dns-proxy-arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -74,7 +74,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64 #,linux/arm64
 
   build-binaries:
     name: Build release binaries
@@ -89,11 +89,11 @@ jobs:
             arch: amd64
             asset_name: mdns-dns-proxy-linux-amd64-musl
             use_cross: false
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            arch: arm64
-            asset_name: mdns-dns-proxy-linux-arm64-musl
-            use_cross: true
+          # - os: ubuntu-latest
+          #   target: aarch64-unknown-linux-musl
+          #   arch: arm64
+          #   asset_name: mdns-dns-proxy-linux-arm64-musl
+          #   use_cross: true
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             arch: amd64
