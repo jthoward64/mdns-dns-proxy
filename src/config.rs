@@ -344,9 +344,9 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = Config::default();
-        assert_eq!(config.server.port, 5335);
-        assert_eq!(config.cache.ttl_seconds, 120);
-        assert!(config.cache.enabled);
+        assert_eq!(config.server.port, default_port());
+        assert_eq!(config.cache.ttl_seconds, default_cache_ttl());
+        assert_eq!(config.cache.enabled, default_cache_enabled());
     }
     
     #[test]
@@ -373,30 +373,30 @@ mod tests {
     #[test]
     fn test_default_server_config() {
         let server = ServerConfig::default();
-        assert_eq!(server.bind_address, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
-        assert_eq!(server.port, 5335);
-        assert_eq!(server.tcp_timeout, 30);
+        assert_eq!(server.bind_address, default_bind_address());
+        assert_eq!(server.port, default_port());
+        assert_eq!(server.tcp_timeout, default_tcp_timeout());
     }
 
     #[test]
     fn test_default_cache_config() {
         let cache = CacheConfig::default();
-        assert_eq!(cache.ttl_seconds, 120);
+        assert_eq!(cache.ttl_seconds, default_cache_ttl());
         assert!(cache.enabled);
     }
 
     #[test]
     fn test_default_logging_config() {
         let logging = LoggingConfig::default();
-        assert_eq!(logging.level, "info");
+        assert_eq!(logging.level, default_log_level());
     }
 
     #[test]
     fn test_default_mdns_config() {
         let mdns = MdnsConfig::default();
-        assert_eq!(mdns.service_query_timeout_ms, 2000);
-        assert_eq!(mdns.service_poll_interval_ms, 500);
-        assert_eq!(mdns.hostname_resolution_timeout_ms, 1000);
+        assert_eq!(mdns.service_query_timeout_ms, default_service_query_timeout());
+        assert_eq!(mdns.service_poll_interval_ms, default_service_poll_interval());
+        assert_eq!(mdns.hostname_resolution_timeout_ms, default_hostname_resolution_timeout());
     }
 
     #[test]
