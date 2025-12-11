@@ -66,8 +66,7 @@ impl MdnsResolver {
 
         // Perform mDNS query based on record type
         let mut records = match record_type {
-            RecordType::A => query::query_a(&self.daemon, name, &self.config).await?,
-            RecordType::AAAA => query::query_aaaa(&self.daemon, name, &self.config).await?,
+            RecordType::A | RecordType::AAAA => query::query_a_aaaa(&self.daemon, name, &self.config).await?,
             RecordType::PTR => query::query_ptr(&self.daemon, name, &self.config).await?,
             RecordType::SRV => query::query_srv(&self.daemon, name, &self.config).await?,
             RecordType::TXT => query::query_txt(&self.daemon, name, &self.config).await?,
@@ -87,11 +86,30 @@ impl MdnsResolver {
             }
         }
 
-        // Cache the results
-        if !records.is_empty() {
-            self.cache.insert(&query_name, record_type, records.clone());
-        }
+        if record_type == RecordType::A || record_type == RecordType::AAAA {
+            // Need to segment the returned record set into A and AAAA records
+            let (a_records, aaaa_records): (Vec<Record>, Vec<Record>) = records
+                .into_iter()
+                .partition(|record| record.record_type() == RecordType::A);
+            
+            if !a_records.is_empty() {
+                self.cache.insert(&query_name, RecordType::A, a_records.clone());
+            }
+            if !aaaa_records.is_empty() {
+                self.cache.insert(&query_name, RecordType::AAAA, aaaa_records.clone());
+            }
+            
+            Ok(match record_type {
+                RecordType::A => a_records,
+                RecordType::AAAA => aaaa_records,
+                _ => unreachable!(),
+            })
+        } else {
+            if !records.is_empty() {
+                self.cache.insert(&query_name, record_type, records.clone());
+            }
 
-        Ok(records)
+            Ok(records)
+        }
     }
 }

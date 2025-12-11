@@ -60,14 +60,8 @@ pub struct LoggingConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MdnsConfig {
     /// PTR/SRV/TXT query timeout in milliseconds
-    /// How long to wait for service discovery responses
     #[serde(default = "default_service_query_timeout")]
     pub service_query_timeout_ms: u64,
-    
-    /// Service discovery meta-query timeout in milliseconds
-    /// Timeout for _services._dns-sd._udp.local. discovery
-    #[serde(default = "default_service_discovery_timeout")]
-    pub service_discovery_timeout_ms: u64,
     
     /// Per-event poll timeout in milliseconds during service queries
     #[serde(default = "default_service_poll_interval")]
@@ -108,12 +102,6 @@ fn default_service_query_timeout() -> u64 {
     option_env!("MDNS_DNS_PROXY_DEFAULT_SERVICE_QUERY_TIMEOUT")
         .and_then(|s| s.parse().ok())
         .unwrap_or(2000)
-}
-
-fn default_service_discovery_timeout() -> u64 {
-    option_env!("MDNS_DNS_PROXY_DEFAULT_SERVICE_DISCOVERY_TIMEOUT")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(300)
 }
 
 fn default_service_poll_interval() -> u64 {
@@ -159,7 +147,6 @@ impl Default for MdnsConfig {
     fn default() -> Self {
         Self {
             service_query_timeout_ms: default_service_query_timeout(),
-            service_discovery_timeout_ms: default_service_discovery_timeout(),
             service_poll_interval_ms: default_service_poll_interval(),
             hostname_resolution_timeout_ms: default_hostname_resolution_timeout(),
         }
@@ -261,14 +248,8 @@ impl Config {
         println!();
         println!("[mdns]");
         println!("# Timeout for service queries (PTR/SRV/TXT) in milliseconds");
-        println!("# How long to wait for service discovery responses");
         println!("# Default: {} ({} seconds)", defaults.mdns.service_query_timeout_ms, defaults.mdns.service_query_timeout_ms as f64 / 1000.0);
         println!("service_query_timeout_ms = {}", defaults.mdns.service_query_timeout_ms);
-        println!();
-        println!("# Timeout for service discovery meta-query in milliseconds");
-        println!("# How long to wait for _services._dns-sd._udp.local. responses");
-        println!("# Default: {} ({} ms)", defaults.mdns.service_discovery_timeout_ms, defaults.mdns.service_discovery_timeout_ms);
-        println!("service_discovery_timeout_ms = {}", defaults.mdns.service_discovery_timeout_ms);
         println!();
         println!("# Per-event poll interval during service queries in milliseconds");
         println!("# How frequently to check for new mDNS events");
@@ -313,10 +294,6 @@ impl Config {
             config.logging.level = log_level;
         }
         
-        if let Some(service_query_timeout) = args.service_query_timeout {
-            config.mdns.service_query_timeout_ms = service_query_timeout;
-        }
-        
         if let Some(hostname_resolution_timeout) = args.hostname_resolution_timeout {
             config.mdns.hostname_resolution_timeout_ms = hostname_resolution_timeout;
         }
@@ -348,12 +325,6 @@ impl Config {
     pub fn service_query_timeout(&self) -> std::time::Duration {
         std::time::Duration::from_millis(self.mdns.service_query_timeout_ms)
     }
-    
-    /// Get service discovery timeout as Duration
-    pub fn service_discovery_timeout(&self) -> std::time::Duration {
-        std::time::Duration::from_millis(self.mdns.service_discovery_timeout_ms)
-    }
-    
     /// Get service poll interval as Duration
     pub fn service_poll_interval(&self) -> std::time::Duration {
         std::time::Duration::from_millis(self.mdns.service_poll_interval_ms)
@@ -424,7 +395,6 @@ mod tests {
     fn test_default_mdns_config() {
         let mdns = MdnsConfig::default();
         assert_eq!(mdns.service_query_timeout_ms, 2000);
-        assert_eq!(mdns.service_discovery_timeout_ms, 300);
         assert_eq!(mdns.service_poll_interval_ms, 500);
         assert_eq!(mdns.hostname_resolution_timeout_ms, 1000);
     }
