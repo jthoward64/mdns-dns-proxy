@@ -64,23 +64,27 @@ jobs:
             target: x86_64-unknown-linux-musl
             asset_name: mdns-dns-proxy-linux-amd64
           - os: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            asset_name: mdns-dns-proxy-linux-arm64
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            asset_name: mdns-dns-proxy-macos-amd64
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            asset_name: mdns-dns-proxy-macos-arm64
+            target: x86_64-unknown-linux-gnu
+            asset_name: mdns-dns-proxy-linux-amd64-gnu
+          # - os: ubuntu-latest
+          #   target: aarch64-unknown-linux-musl
+          #   asset_name: mdns-dns-proxy-linux-arm64
+          # - os: macos-latest
+          #   target: x86_64-apple-darwin
+          #   asset_name: mdns-dns-proxy-macos-amd64
+          # - os: macos-latest
+          #   target: aarch64-apple-darwin
+          #   asset_name: mdns-dns-proxy-macos-arm64
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          targets: ${{ matrix.target }}
+          target: ${{ matrix.target }}
+          rust-src-dir: src
 
       - name: Install cross-compilation tools (Linux)
         if: runner.os == 'Linux'
