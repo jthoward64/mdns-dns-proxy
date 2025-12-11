@@ -1,5 +1,5 @@
 use crate::config::Config;
-use hickory_proto::rr::{Name, RData, Record};
+use hickory_proto::rr::{Name, RData, Record, domain::Label};
 use mdns_sd::{HostnameResolutionEvent, ServiceDaemon, ServiceEvent};
 use tokio::time::timeout;
 use tracing::{debug, error, info};
@@ -52,7 +52,14 @@ pub async fn query_ptr(
 
                         // Create PTR record
                         let ptr_name = Name::from_utf8(&service_type)?;
-                        let target_name = Name::from_utf8(info.get_fullname())?;
+                        // let target_name = Name::from_utf8(info.get_fullname())?;
+                        let target_labels: Vec<Label> = info
+                            .get_fullname()
+                            .split('.')
+                            .filter(|s| !s.is_empty())
+                            .map(|s| Label::from_raw_bytes(s.as_bytes()))
+                            .collect::<Result<Vec<_>, _>>()?;
+                        let target_name = Name::from_labels(target_labels)?;
 
                         let record = Record::from_rdata(
                             ptr_name,
@@ -61,6 +68,8 @@ pub async fn query_ptr(
                         );
 
                         records.push(record);
+
+                        info!("Added PTR record for {}", info.get_fullname());
                     }
                     ServiceEvent::SearchStarted(ty) => {
                         debug!("Search started for: {}", ty);
