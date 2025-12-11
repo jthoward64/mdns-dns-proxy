@@ -11,6 +11,13 @@ env:
 jobs:
   build-and-push-docker:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - dockerfile: docker/Dockerfile
+            variant: ""
+          - dockerfile: docker/Dockerfile.alpine
+            variant: "-alpine"
     permissions:
       contents: read
       packages: write
@@ -35,16 +42,16 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}${{ matrix.variant }}
+            type=semver,pattern={{major}}.{{minor}}${{ matrix.variant }}
+            type=semver,pattern={{major}}${{ matrix.variant }}
+            type=raw,value=latest${{ matrix.variant }},enable={{is_default_branch}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: docker/Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

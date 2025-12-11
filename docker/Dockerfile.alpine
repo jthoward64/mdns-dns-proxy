@@ -1,12 +1,15 @@
-FROM rust:1-trixie AS builder
+FROM rust:1-alpine3.23 AS builder
 
 # Set target architecture based on platform
 ARG TARGETPLATFORM
 RUN case "$TARGETPLATFORM" in \
-        "linux/amd64") echo "x86_64-unknown-linux-gnu" > /tmp/rust-target ;; \
-        "linux/arm64") echo "aarch64-unknown-linux-gnu" > /tmp/rust-target ;; \
+        "linux/amd64") echo "x86_64-unknown-linux-musl" > /tmp/rust-target ;; \
+        "linux/arm64") echo "aarch64-unknown-linux-musl" > /tmp/rust-target ;; \
         *) echo "Unsupported platform: $TARGETPLATFORM" && exit 1 ;; \
     esac
+
+# Install build dependencies
+RUN apk add --no-cache musl-dev build-base pkgconfig
 
 # Install the target
 RUN rustup target add $(cat /tmp/rust-target)
@@ -20,17 +23,17 @@ COPY Cargo.toml Cargo.lock .
 # Copy source tree
 COPY src ./src
 
-# Build for release
+# Build for release with static linking
 RUN RUST_TARGET=$(cat /tmp/rust-target) && \
     cargo build --release --target $RUST_TARGET && \
     cp target/$RUST_TARGET/release/mdns-dns-proxy /usr/local/bin/mdns-dns-proxy
 
 # Runtime stage
-FROM debian:trixie-slim
+FROM alpine:3.23
 
 # Create a non-root user
-RUN groupadd -g 1000 mdns && \
-    useradd -m -u 1000 -g mdns mdns
+RUN addgroup -g 1000 mdns && \
+    adduser -D -u 1000 -G mdns mdns
 
 # Copy the binary from builder
 COPY --from=builder /usr/local/bin/mdns-dns-proxy /usr/local/bin/mdns-dns-proxy
