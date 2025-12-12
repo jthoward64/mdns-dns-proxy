@@ -1,5 +1,5 @@
 use crate::config::Config;
-use hickory_proto::rr::{Name, RData, Record, domain::Label};
+use hickory_proto::rr::{domain::Label, Name, RData, Record};
 use mdns_sd::{HostnameResolutionEvent, ServiceDaemon, ServiceEvent};
 use tokio::time::timeout;
 use tracing::{debug, error, info};
@@ -11,6 +11,7 @@ pub async fn query_a_aaaa(
     config: &Config,
 ) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
     let hostname = name.to_utf8().to_lowercase();
+    let hostname_unescaped = unescape_instance_label(&hostname);
 
     // Check if this is a .local query
     if hostname.strip_suffix(".").unwrap_or(&hostname).split(".").last().unwrap_or("") != "local" {
@@ -18,7 +19,7 @@ pub async fn query_a_aaaa(
     }
 
     // Try to resolve as a service instance or hostname
-    resolve_hostname(daemon, &hostname, config).await
+    resolve_hostname(daemon, &hostname_unescaped, config).await
 }
 
 /// Query for PTR records (service enumeration)
@@ -52,14 +53,7 @@ pub async fn query_ptr(
 
                         // Create PTR record
                         let ptr_name = Name::from_utf8(&service_type)?;
-                        // let target_name = Name::from_utf8(info.get_fullname())?;
-                        let target_labels: Vec<Label> = info
-                            .get_fullname()
-                            .split('.')
-                            .filter(|s| !s.is_empty())
-                            .map(|s| Label::from_raw_bytes(s.as_bytes()))
-                            .collect::<Result<Vec<_>, _>>()?;
-                        let target_name = Name::from_labels(target_labels)?;
+                        let target_name = name_from_labels_str(info.get_fullname())?;
 
                         let record = Record::from_rdata(
                             ptr_name,
@@ -116,6 +110,8 @@ pub async fn query_srv(
     // Skip instance name (first part) and reconstruct service type
     let service_type = parts[1..].join(".");
 
+    debug!("Browsing for service type: {}", service_type);
+
     let receiver = daemon.browse(&service_type)?;
     let mut records = Vec::new();
 
@@ -131,8 +127,19 @@ pub async fn query_srv(
 
         match timeout(poll_interval, receiver.recv_async()).await {
             Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
-                if info.get_fullname() == service_name {
-                    let srv_name = Name::from_utf8(&service_name)?;
+                // Compare case-insensitively and normalize escaped/unescaped instance labels
+                let unescaped_query = unescape_instance_label(&service_name).to_lowercase();
+                let escaped_query = escape_instance_label(&unescaped_query);
+
+                let info_fullname = info.get_fullname();
+                let info_fullname_lc = info_fullname.to_lowercase();
+                let escaped_info_fullname = escape_instance_label(&info_fullname_lc);
+
+                debug!("Comparing queried service name '{}' (escaped: '{}') with resolved service name '{}' (escaped: '{}')",
+                    unescaped_query, escaped_query, info_fullname_lc, escaped_info_fullname);
+
+                if info_fullname_lc == unescaped_query || escaped_info_fullname == escaped_query {
+                    let srv_name = name.clone();
                     let target = Name::from_utf8(info.get_hostname())?;
 
                     let record = Record::from_rdata(
@@ -195,8 +202,16 @@ pub async fn query_txt(
 
         match timeout(poll_interval, receiver.recv_async()).await {
             Ok(Ok(ServiceEvent::ServiceResolved(info))) => {
-                if info.get_fullname() == service_name {
-                    let txt_name = Name::from_utf8(&service_name)?;
+                // Compare case-insensitively and normalize escaped/unescaped instance labels
+                let unescaped_query = unescape_instance_label(&service_name).to_lowercase();
+                let escaped_query = escape_instance_label(&unescaped_query);
+
+                let info_fullname = info.get_fullname();
+                let info_fullname_lc = info_fullname.to_lowercase();
+                let escaped_info_fullname = escape_instance_label(&info_fullname_lc);
+
+                if info_fullname_lc == unescaped_query || escaped_info_fullname == escaped_query {
+                    let txt_name = name.clone();
 
                     let txt_records: Vec<String> = info
                         .get_properties()
@@ -260,7 +275,7 @@ async fn resolve_hostname(
                         match addr {
                             mdns_sd::ScopedIp::V4(ipv4) => {
                                 let ipv4_addr = ipv4.addr();
-                                let name = Name::from_utf8(hostname)?;
+                                let name = name_from_labels_str(hostname)?;
                                 let record = Record::from_rdata(
                                     name,
                                     120,
@@ -272,7 +287,7 @@ async fn resolve_hostname(
                             }
                             mdns_sd::ScopedIp::V6(ipv6) => {
                                 let ipv6_addr = ipv6.addr();
-                                let name = Name::from_utf8(hostname)?;
+                                let name = name_from_labels_str(hostname)?;
                                 let record = Record::from_rdata(
                                     name,
                                     120,
@@ -325,6 +340,35 @@ async fn resolve_hostname(
     records.sort_by(|a, b| a.data().cmp(b.data()));
     records.dedup_by(|a, b| a.data() == b.data());
     Ok(records)
+}
+
+/// Escape the instance label (first label) of an mDNS fullname so Hickory accepts it as DNS.
+/// Spaces are turned into "\032" per DNS escaping rules; other labels are left untouched.
+fn escape_instance_label(fullname: &str) -> String {
+    let mut parts: Vec<String> = fullname.split('.').map(str::to_string).collect();
+    if let Some(first) = parts.first_mut() {
+        *first = first.replace(' ', "\\032");
+    }
+    parts.join(".")
+}
+
+/// Inverse of escape_instance_label for comparison: "\032" back to space in the first label.
+fn unescape_instance_label(fullname: &str) -> String {
+    let mut parts: Vec<String> = fullname.split('.').map(str::to_string).collect();
+    if let Some(first) = parts.first_mut() {
+        *first = first.replace("\\032", " ");
+    }
+    parts.join(".")
+}
+
+/// Build a DNS Name from raw labels, permitting spaces by constructing Labels from bytes.
+fn name_from_labels_str(fullname: &str) -> Result<Name, Box<dyn std::error::Error + Send + Sync>> {
+    let labels: Vec<Label> = fullname
+        .split('.')
+        .filter(|s| !s.is_empty())
+        .map(|s| Label::from_raw_bytes(s.as_bytes()))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Name::from_labels(labels)?)
 }
 
 /// Query for SOA (Start of Authority) records per RFC 8766 Section 6.1

@@ -23,7 +23,7 @@ impl MdnsResolver {
     pub fn new(config: Arc<Config>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let daemon = Arc::new(ServiceDaemon::new()?);
         daemon.enable_interface(IfKind::All)?;
-        daemon.accept_unsolicited(true)?;
+        // daemon.accept_unsolicited(true)?;
         
         Ok(Self {
             daemon,
@@ -39,7 +39,7 @@ impl MdnsResolver {
         config: Arc<Config>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         daemon.enable_interface(IfKind::All)?;
-        daemon.accept_unsolicited(true)?;
+        // daemon.accept_unsolicited(true)?;
         
         Ok(Self {
             daemon,
