@@ -253,10 +253,15 @@ async fn resolve_hostname(
         hostname,
         Some(config.hostname_resolution_timeout().as_millis() as u64),
     ) {
-        let now = std::time::Instant::now();
+        let mut now = std::time::Instant::now();
         let deadline = now + config.hostname_resolution_timeout();
 
         loop {
+            if receiver.is_disconnected() {
+                break;
+            }
+
+            now = std::time::Instant::now();
             // Wait for the smaller of poll_interval or the remaining time
             let remaining = deadline.saturating_duration_since(now);
             if remaining.is_zero() {
