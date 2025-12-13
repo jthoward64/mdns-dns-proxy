@@ -5,119 +5,128 @@ use hickory_proto::op::ResponseCode;
 use std::sync::Arc;
 
 #[test]
-fn test_should_handle_local_domain_with_trailing_dot() {
-    assert!(should_handle_domain("hostname.local."));
-    assert!(should_handle_domain("subdomain.hostname.local."));
-    assert!(should_handle_domain("my-device.local."));
+fn test_should_handle_domain_with_trailing_dot() {
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("hostname.{}", dom), dom));
+    assert!(should_handle_domain(&format!("subdomain.hostname.{}", dom), dom));
+    assert!(should_handle_domain(&format!("my-device.{}", dom), dom));
 }
 
 #[test]
-fn test_should_handle_local_domain_without_trailing_dot() {
-    assert!(should_handle_domain("hostname.local"));
-    assert!(should_handle_domain("subdomain.hostname.local"));
+fn test_should_handle_domain_without_trailing_dot() {
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("hostname.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("subdomain.hostname.{}", dom.trim_end_matches('.')), dom));
 }
 
 #[test]
 fn test_should_handle_service_discovery_tcp() {
-    assert!(should_handle_domain("_http._tcp.local"));
-    assert!(should_handle_domain("_http._tcp.local."));
-    assert!(should_handle_domain("MyService._http._tcp.local"));
-    assert!(should_handle_domain("MyService._http._tcp.local."));
-    assert!(should_handle_domain("_ssh._tcp.local"));
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("_http._tcp.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("_http._tcp.{}", dom), dom));
+    assert!(should_handle_domain(&format!("MyService._http._tcp.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("MyService._http._tcp.{}", dom), dom));
+    assert!(should_handle_domain(&format!("_ssh._tcp.{}", dom.trim_end_matches('.')), dom));
 }
 
 #[test]
 fn test_should_handle_service_discovery_udp() {
-    assert!(should_handle_domain("_dns._udp.local"));
-    assert!(should_handle_domain("_dns._udp.local."));
-    assert!(should_handle_domain("MyService._dns._udp.local"));
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("_dns._udp.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("_dns._udp.{}", dom), dom));
+    assert!(should_handle_domain(&format!("MyService._dns._udp.{}", dom.trim_end_matches('.')), dom));
 }
 
 #[test]
 fn test_should_not_handle_regular_domains() {
-    assert!(!should_handle_domain("example.com"));
-    assert!(!should_handle_domain("www.google.com"));
-    assert!(!should_handle_domain("subdomain.example.org"));
-    assert!(!should_handle_domain("192.168.1.1"));
+    let dom = "mdns.home.arpa.";
+    assert!(!should_handle_domain("example.com", dom));
+    assert!(!should_handle_domain("www.google.com", dom));
+    assert!(!should_handle_domain("subdomain.example.org", dom));
+    assert!(!should_handle_domain("192.168.1.1", dom));
 }
 
 #[test]
 fn test_should_not_handle_similar_but_different_domains() {
-    assert!(!should_handle_domain("localhost"));
-    assert!(!should_handle_domain("localnet"));
-    assert!(!should_handle_domain("mylocal.com"));
-    assert!(!should_handle_domain("tcp.local.com"));
+    let dom = "mdns.home.arpa.";
+    assert!(!should_handle_domain("localhost", dom));
+    assert!(!should_handle_domain("localnet", dom));
+    assert!(!should_handle_domain("mylocal.com", dom));
+    assert!(!should_handle_domain("tcp.local.com", dom));
 }
 
 #[test]
 fn test_should_handle_case_sensitivity() {
-    // Domain names are case-insensitive, but our function is case-sensitive
-    // This tests current behavior
-    assert!(should_handle_domain("hostname.local"));
-    assert!(should_handle_domain("hostname.LOCAL")); // Still contains .local
-    assert!(should_handle_domain("HOSTNAME.local"));
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("hostname.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("hostname.{}", dom.to_uppercase()), dom));
+    assert!(should_handle_domain(&format!("HOSTNAME.{}", dom.trim_end_matches('.')), dom));
 }
 
 #[test]
 fn test_should_handle_empty_and_edge_cases() {
-    assert!(!should_handle_domain(""));
-    assert!(!should_handle_domain("."));
-    assert!(!should_handle_domain(".."));
-    assert!(should_handle_domain(".local")); // Technically matches
-    assert!(should_handle_domain(".local."));
+    let dom = "mdns.home.arpa.";
+    assert!(!should_handle_domain("", dom));
+    assert!(!should_handle_domain(".", dom));
+    assert!(!should_handle_domain("..", dom));
+    assert!(should_handle_domain(dom.trim_start_matches('.'), dom));
+    assert!(should_handle_domain(dom, dom));
 }
 
 #[test]
 fn test_should_handle_complex_service_names() {
-    assert!(should_handle_domain("My Service (2)._http._tcp.local"));
-    assert!(should_handle_domain("Office-Printer._ipp._tcp.local"));
-    assert!(should_handle_domain("_device-info._tcp.local"));
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("My Service (2)._http._tcp.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("Office-Printer._ipp._tcp.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("_device-info._tcp.{}", dom.trim_end_matches('.')), dom));
 }
 
 #[test]
 fn test_should_handle_various_tlds() {
-    // Should handle .local TLD
-    assert!(should_handle_domain("test.local"));
-    assert!(should_handle_domain("test.local."));
-    
-    // Should not handle other TLDs
-    assert!(!should_handle_domain("test.com"));
-    assert!(!should_handle_domain("test.org"));
-    assert!(!should_handle_domain("test.net"));
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("test.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("test.{}", dom), dom));
+    assert!(!should_handle_domain("test.com", dom));
+    assert!(!should_handle_domain("test.org", dom));
+    assert!(!should_handle_domain("test.net", dom));
 }
 
 #[test]
 fn test_should_handle_subdomain_levels() {
-    assert!(should_handle_domain("a.local"));
-    assert!(should_handle_domain("a.b.local"));
-    assert!(should_handle_domain("a.b.c.local"));
-    assert!(should_handle_domain("a.b.c.d.local"));
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("a.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("a.b.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("a.b.c.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("a.b.c.d.{}", dom.trim_end_matches('.')), dom));
 }
 
 #[test]
 fn test_should_handle_service_instance_patterns() {
     // Standard service instance format: instance._service._proto.domain
-    assert!(should_handle_domain("MyPrinter._ipp._tcp.local"));
-    assert!(should_handle_domain("Living Room TV._googlecast._tcp.local"));
-    assert!(should_handle_domain("Office-PC._smb._tcp.local"));
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("MyPrinter._ipp._tcp.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("Living Room TV._googlecast._tcp.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("Office-PC._smb._tcp.{}", dom.trim_end_matches('.')), dom));
 }
 
 #[test]
 fn test_should_handle_mixed_case_protocols() {
-    assert!(should_handle_domain("service._TCP.local"));
-    assert!(should_handle_domain("service._Tcp.local"));
-    assert!(should_handle_domain("service._UDP.local"));
-    assert!(should_handle_domain("service._Udp.local"));
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("service._TCP.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("service._Tcp.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("service._UDP.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("service._Udp.{}", dom.trim_end_matches('.')), dom));
 }
 
 #[test]
 fn test_dns_handler_creation() {
     let config = crate::config::Config::default();
     let resolver = MdnsResolver::new(Arc::new(config)).unwrap();
-    let handler = MdnsDnsHandler::new(Arc::new(resolver));
+    let discovery_domain = "mdns.home.arpa.".to_string();
+    let handler = MdnsDnsHandler::new(Arc::new(resolver), discovery_domain.clone());
     
     // Test that handler correctly identifies domains
-    let name = hickory_proto::rr::Name::from_utf8("test.local").unwrap();
+    let name = hickory_proto::rr::Name::from_utf8(&format!("test.{}", discovery_domain)).unwrap();
     assert!(handler.should_handle(&name));
     
     let name = hickory_proto::rr::Name::from_utf8("test.com").unwrap();
@@ -126,28 +135,31 @@ fn test_dns_handler_creation() {
 
 #[test]
 fn test_should_handle_special_characters() {
-    assert!(should_handle_domain("test-device.local"));
-    assert!(should_handle_domain("test_device.local"));
-    assert!(should_handle_domain("test123.local"));
-    assert!(should_handle_domain("123test.local"));
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("test-device.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("test_device.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("test123.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("123test.{}", dom.trim_end_matches('.')), dom));
 }
 
 #[test]
 fn test_should_handle_unicode() {
     // DNS allows unicode in domain names
-    assert!(should_handle_domain("münchen.local"));
-    assert!(should_handle_domain("日本.local"));
-    assert!(should_handle_domain("test-ñ.local"));
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("münchen.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("日本.{}", dom.trim_end_matches('.')), dom));
+    assert!(should_handle_domain(&format!("test-ñ.{}", dom.trim_end_matches('.')), dom));
 }
 
 #[test]
 fn test_should_handle_max_length() {
     // DNS labels can be up to 63 characters
     let long_label = "a".repeat(63);
-    assert!(should_handle_domain(&format!("{}.local", long_label)));
+    let dom = "mdns.home.arpa.";
+    assert!(should_handle_domain(&format!("{}.{}", long_label, dom.trim_end_matches('.')), dom));
     
     // With service discovery
-    assert!(should_handle_domain(&format!("{}._http._tcp.local", long_label)));
+    assert!(should_handle_domain(&format!("{}._http._tcp.{}", long_label, dom.trim_end_matches('.')), dom));
 }
 
 #[test]
@@ -156,7 +168,7 @@ fn test_build_response_from_records_success_with_records() {
     use std::net::Ipv4Addr;
     use std::str::FromStr;
 
-    let name = Name::from_str("test.local.").unwrap();
+    let name = Name::from_str("test.mdns.home.arpa.").unwrap();
     let rdata = RData::A(hickory_proto::rr::rdata::A(Ipv4Addr::new(192, 168, 1, 1)));
     let record = Record::from_rdata(name, 300, rdata);
     
@@ -202,7 +214,7 @@ fn test_build_response_from_records_multiple_records() {
     use std::net::Ipv4Addr;
     use std::str::FromStr;
 
-    let name = Name::from_str("test.local.").unwrap();
+    let name = Name::from_str("test.mdns.home.arpa.").unwrap();
     let rdata1 = RData::A(hickory_proto::rr::rdata::A(Ipv4Addr::new(192, 168, 1, 1)));
     let record1 = Record::from_rdata(name.clone(), 300, rdata1);
     

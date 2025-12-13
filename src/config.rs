@@ -37,6 +37,10 @@ pub struct ServerConfig {
     /// TCP connection timeout in seconds
     #[serde(default = "default_tcp_timeout")]
     pub tcp_timeout: u64,
+
+    /// Discovery domain served by this proxy (mapped to .local for mDNS)
+    #[serde(default = "default_discovery_domain")]
+    pub discovery_domain: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,6 +90,10 @@ fn default_tcp_timeout() -> u64 {
     30
 }
 
+fn default_discovery_domain() -> String {
+    "mdns.home.arpa.".to_string()
+}
+
 fn default_cache_ttl() -> u64 {
     120
 }
@@ -116,12 +124,21 @@ fn default_hostname_resolution_timeout() -> u64 {
         .unwrap_or(1500)
 }
 
+fn normalize_domain(domain: &str) -> String {
+    let mut d = domain.trim().trim_end_matches('.').to_lowercase();
+    if d.starts_with('.') {
+        d = d.trim_start_matches('.').to_string();
+    }
+    format!("{}.", d)
+}
+
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             bind_address: default_bind_address(),
             port: default_port(),
             tcp_timeout: default_tcp_timeout(),
+            discovery_domain: default_discovery_domain(),
         }
     }
 }
@@ -199,6 +216,10 @@ pub struct Args {
     /// Hostname resolution timeout in milliseconds (A/AAAA queries)
     #[arg(long, env = "MDNS_DNS_PROXY_HOSTNAME_RESOLUTION_TIMEOUT")]
     pub hostname_resolution_timeout: Option<u64>,
+
+    /// Discovery domain served by this proxy (mapped to .local for mDNS)
+    #[arg(long, env = "MDNS_DNS_PROXY_DISCOVERY_DOMAIN")]
+    pub discovery_domain: Option<String>,
     
     /// Print an example configuration file with defaults and exit
     #[arg(long)]
@@ -229,6 +250,10 @@ impl Config {
         println!("# TCP connection timeout in seconds");
         println!("# Default: {}", defaults.server.tcp_timeout);
         println!("tcp_timeout = {}", defaults.server.tcp_timeout);
+        println!();
+        println!("# Discovery domain served by this proxy (mapped to .local for mDNS)");
+        println!("# Default: {}", defaults.server.discovery_domain);
+        println!("discovery_domain = \"{}\"", defaults.server.discovery_domain);
         println!();
         println!("[cache]");
         println!("# Cache TTL (time-to-live) in seconds");
@@ -272,6 +297,9 @@ impl Config {
         } else {
             Config::default()
         };
+
+        // Normalize discovery domain from config file/defaults
+        config.server.discovery_domain = normalize_domain(&config.server.discovery_domain);
         
         // Override with CLI arguments
         if let Some(bind_address) = args.bind_address {
@@ -296,6 +324,10 @@ impl Config {
         
         if let Some(hostname_resolution_timeout) = args.hostname_resolution_timeout {
             config.mdns.hostname_resolution_timeout_ms = hostname_resolution_timeout;
+        }
+
+        if let Some(discovery_domain) = args.discovery_domain {
+            config.server.discovery_domain = normalize_domain(&discovery_domain);
         }
         
         Ok(config)
@@ -334,6 +366,11 @@ impl Config {
     pub fn hostname_resolution_timeout(&self) -> std::time::Duration {
         std::time::Duration::from_millis(self.mdns.hostname_resolution_timeout_ms)
     }
+
+    /// Discovery domain served by the proxy (normalized, lower-case, with trailing dot)
+    pub fn discovery_domain(&self) -> &str {
+        &self.server.discovery_domain
+    }
 }
 
 #[cfg(test)]
@@ -347,6 +384,7 @@ mod tests {
         assert_eq!(config.server.port, default_port());
         assert_eq!(config.cache.ttl_seconds, default_cache_ttl());
         assert_eq!(config.cache.enabled, default_cache_enabled());
+        assert_eq!(config.server.discovery_domain, default_discovery_domain());
     }
     
     #[test]
@@ -368,6 +406,7 @@ mod tests {
         assert_eq!(config.server.port, 5354);
         assert_eq!(config.cache.ttl_seconds, 300);
         assert_eq!(config.logging.level, "debug");
+        assert_eq!(config.server.discovery_domain, default_discovery_domain());
     }
 
     #[test]
@@ -376,6 +415,7 @@ mod tests {
         assert_eq!(server.bind_address, default_bind_address());
         assert_eq!(server.port, default_port());
         assert_eq!(server.tcp_timeout, default_tcp_timeout());
+        assert_eq!(server.discovery_domain, default_discovery_domain());
     }
 
     #[test]
@@ -498,6 +538,7 @@ mod tests {
             bind_address = "0.0.0.0"
             port = 5354
             tcp_timeout = 60
+            discovery_domain = "Example.COM"
             
             [cache]
             ttl_seconds = 300
@@ -515,6 +556,7 @@ mod tests {
         assert_eq!(config.server.bind_address, IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)));
         assert_eq!(config.server.port, 5354);
         assert_eq!(config.server.tcp_timeout, 60);
+        assert_eq!(config.server.discovery_domain, "Example.COM");
         assert_eq!(config.cache.ttl_seconds, 300);
         assert!(!config.cache.enabled);
         assert_eq!(config.logging.level, "trace");
@@ -567,6 +609,7 @@ mod tests {
             log_level: None,
             service_query_timeout: None,
             hostname_resolution_timeout: None,
+            discovery_domain: None,
             print_example_config: false,
         };
         
@@ -575,6 +618,7 @@ mod tests {
         assert_eq!(config.server.port, 5335);
         assert_eq!(config.cache.ttl_seconds, 120);
         assert!(config.cache.enabled);
+        assert_eq!(config.server.discovery_domain, default_discovery_domain());
     }
 
     #[test]
@@ -590,6 +634,7 @@ mod tests {
             log_level: Some("debug".to_string()),
             service_query_timeout: Some(2000),
             hostname_resolution_timeout: Some(1500),
+            discovery_domain: Some("Custom.Domain".to_string()),
             print_example_config: false,
         };
         
@@ -601,6 +646,7 @@ mod tests {
         assert_eq!(config.logging.level, "debug");
         assert_eq!(config.mdns.service_query_timeout_ms, 2000);
         assert_eq!(config.mdns.hostname_resolution_timeout_ms, 1500);
+        assert_eq!(config.server.discovery_domain, "custom.domain.");
     }
 
     #[test]
@@ -630,6 +676,7 @@ mod tests {
             log_level: None,
             service_query_timeout: None,
             hostname_resolution_timeout: None,
+            discovery_domain: None,
             print_example_config: false,
         };
         
@@ -661,6 +708,7 @@ mod tests {
             log_level: None,
             service_query_timeout: None,
             hostname_resolution_timeout: None,
+            discovery_domain: None,
             print_example_config: false,
         };
         
@@ -682,6 +730,7 @@ mod tests {
             log_level: None,
             service_query_timeout: None,
             hostname_resolution_timeout: None,
+            discovery_domain: None,
             print_example_config: false,
         };
         
@@ -700,6 +749,7 @@ mod tests {
             log_level: Some("trace".to_string()),
             service_query_timeout: None,
             hostname_resolution_timeout: None,
+            discovery_domain: None,
             print_example_config: false,
         };
         
@@ -709,5 +759,12 @@ mod tests {
         // Other values should be defaults
         assert_eq!(config.cache.ttl_seconds, 120);
         assert!(config.cache.enabled);
+    }
+
+    #[test]
+    fn test_normalize_domain_lowercase_and_trailing_dot() {
+        assert_eq!(normalize_domain("Example.COM"), "example.com.");
+        assert_eq!(normalize_domain("example.com."), "example.com.");
+        assert_eq!(normalize_domain(".Example.Com"), "example.com.");
     }
 }

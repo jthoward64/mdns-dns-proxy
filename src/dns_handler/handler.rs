@@ -19,16 +19,19 @@ pub struct MdnsDnsHandler {
     resolver: Arc<MdnsResolver>,
     /// Zone apex for the Discovery Proxy (default: local.)
     zone_apex: Name,
+    discovery_domain: String,
     /// Configuration for suppressing unusable records
     suppression_config: RecordSuppressionConfig,
 }
 
 impl MdnsDnsHandler {
     /// Create a new DNS handler with mDNS resolver
-    pub fn new(resolver: Arc<MdnsResolver>) -> Self {
+    pub fn new(resolver: Arc<MdnsResolver>, discovery_domain: String) -> Self {
+        let zone_apex = Name::from_utf8(&discovery_domain).unwrap();
         Self { 
             resolver,
-            zone_apex: Name::from_utf8("local.").unwrap(),
+            zone_apex,
+            discovery_domain,
             suppression_config: RecordSuppressionConfig::default(),
         }
     }
@@ -37,6 +40,7 @@ impl MdnsDnsHandler {
     pub fn with_zone_apex(resolver: Arc<MdnsResolver>, zone_apex: Name) -> Self {
         Self {
             resolver,
+            discovery_domain: zone_apex.to_utf8(),
             zone_apex,
             suppression_config: RecordSuppressionConfig::default(),
         }
@@ -44,7 +48,7 @@ impl MdnsDnsHandler {
 
     /// Check if the query should be handled by this proxy
     pub fn should_handle(&self, name: &Name) -> bool {
-        should_handle_domain(&name.to_utf8())
+        should_handle_domain(&name.to_utf8(), &self.discovery_domain)
     }
 
     /// Handle administrative queries that don't need mDNS forwarding
@@ -70,13 +74,13 @@ impl MdnsDnsHandler {
         // REQ-6.3.1: Zone apex SOA query
         if record_type == RecordType::SOA && is_zone_apex_query(name, &self.zone_apex) {
             info!("Handling zone apex SOA query");
-            return Some(vec![generate_soa_record(name)]);
+            return Some(vec![generate_soa_record(name, &self.zone_apex)]);
         }
 
         // REQ-6.2.1: Zone apex NS query
         if record_type == RecordType::NS && is_zone_apex_query(name, &self.zone_apex) {
             info!("Handling zone apex NS query");
-            return Some(vec![generate_ns_record(name)]);
+            return Some(vec![generate_ns_record(name, &self.zone_apex)]);
         }
 
         // REQ-6.3.2-4: NS/DS/SOA query below zone apex - immediate negative answer
@@ -120,7 +124,7 @@ impl RequestHandler for MdnsDnsHandler {
 
         // Check if we should handle this query
         if !self.should_handle(request_message.query.name()) {
-            debug!("Query not for .local domain, returning NXDOMAIN");
+            debug!("Query not for discovery domain {}, returning NXDOMAIN", self.discovery_domain);
             header.set_response_code(ResponseCode::NXDomain);
             let response = builder.build_no_records(header);
             return response_handle.send_response(response).await.unwrap_or_else(|e| {

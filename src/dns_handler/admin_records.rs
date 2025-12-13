@@ -87,7 +87,7 @@ pub fn is_zone_apex_query(name: &Name, zone_apex: &Name) -> bool {
 }
 
 /// Generate SOA record for zone apex per RFC 8766 Section 6.1
-pub fn generate_soa_record(name: &Name) -> Record {
+pub fn generate_soa_record(name: &Name, zone_apex: &Name) -> Record {
     // Per RFC 8766 Section 6.1:
     // - MNAME: host name of the Discovery Proxy device
     // - RNAME: mailbox of the person responsible
@@ -95,8 +95,10 @@ pub fn generate_soa_record(name: &Name) -> Record {
     // - REFRESH: 7200, RETRY: 3600, EXPIRE: 86400 (recommended)
     // - MINIMUM: 10 (negative caching TTL per Section 5.5.1)
     
-    let mname = Name::from_utf8("discovery-proxy.local.").unwrap();
-    let rname = Name::from_utf8("hostmaster.local.").unwrap();
+    let zone = zone_apex.to_utf8();
+    let zone_trimmed = zone.trim_end_matches('.');
+    let mname = Name::from_utf8(&format!("discovery-proxy.{}.", zone_trimmed)).unwrap();
+    let rname = Name::from_utf8(&format!("hostmaster.{}.", zone_trimmed)).unwrap();
     
     let soa = SOA::new(
         mname,
@@ -116,12 +118,14 @@ pub fn generate_soa_record(name: &Name) -> Record {
 }
 
 /// Generate NS record for zone apex per RFC 8766 Section 6.2
-pub fn generate_ns_record(name: &Name) -> Record {
+pub fn generate_ns_record(name: &Name, zone_apex: &Name) -> Record {
     // Per RFC 8766 Section 6.2:
     // Each Discovery Proxy returns its own NS record
     // NS target host MUST NOT fall within delegated zone (except zone apex)
     
-    let ns_name = Name::from_utf8("discovery-proxy.local.").unwrap();
+    let zone = zone_apex.to_utf8();
+    let zone_trimmed = zone.trim_end_matches('.');
+    let ns_name = Name::from_utf8(&format!("discovery-proxy.{}.", zone_trimmed)).unwrap();
     let ns = NS(ns_name);
     
     Record::from_rdata(
@@ -407,8 +411,8 @@ mod tests {
 
     #[test]
     fn test_generate_soa_record() {
-        let name = Name::from_utf8("local.").unwrap();
-        let record = generate_soa_record(&name);
+        let name = Name::from_utf8("mdns.home.arpa.").unwrap();
+        let record = generate_soa_record(&name, &name);
         
         assert_eq!(record.name(), &name);
         assert_eq!(record.ttl(), MAX_ADMIN_TTL);
@@ -426,8 +430,8 @@ mod tests {
 
     #[test]
     fn test_generate_ns_record() {
-        let name = Name::from_utf8("local.").unwrap();
-        let record = generate_ns_record(&name);
+        let name = Name::from_utf8("mdns.home.arpa.").unwrap();
+        let record = generate_ns_record(&name, &name);
         
         assert_eq!(record.name(), &name);
         assert_eq!(record.ttl(), MAX_ADMIN_TTL);

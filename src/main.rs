@@ -32,12 +32,13 @@ async fn main() {
         .with_max_level(config.parse_log_level())
         .init();
 
-    info!("Starting mDNS-DNS Discovery Proxy (RFC 8766)");
-    info!("Configuration: bind={}:{}, cache_ttl={}s, cache_enabled={}", 
-          config.server.bind_address, 
-          config.server.port, 
-          config.cache.ttl_seconds,
-          config.cache.enabled);
+        info!("Starting mDNS-DNS Discovery Proxy (RFC 8766)");
+        info!("Configuration: bind={}:{}, cache_ttl={}s, cache_enabled={}, discovery_domain={}", 
+            config.server.bind_address, 
+            config.server.port, 
+            config.cache.ttl_seconds,
+            config.cache.enabled,
+            config.discovery_domain());
 
     // Wrap config in Arc for sharing
     let config = Arc::new(config);
@@ -53,7 +54,7 @@ async fn main() {
     info!("mDNS resolver initialized");
 
     // Create DNS handler
-    let handler = MdnsDnsHandler::new(resolver);
+    let handler = MdnsDnsHandler::new(resolver, config.discovery_domain().to_string());
 
     // Configure server address from config
     let listen_addr = SocketAddr::new(config.server.bind_address, config.server.port);
@@ -95,10 +96,11 @@ async fn main() {
     info!("Registered TCP listener");
 
     info!("mDNS-DNS proxy server is running!");
-    info!("Query .local domains via this DNS server at {}", listen_addr);
-    info!("Example: dig @{} -p {} hostname.local", 
-          config.server.bind_address, 
-          config.server.port);
+        info!("Serving discovery domain {} via DNS at {}", config.discovery_domain(), listen_addr);
+        info!("Example: dig @{} -p {} hostname{}", 
+            config.server.bind_address, 
+            config.server.port,
+            config.discovery_domain());
 
     // Run the server
     match server.block_until_done().await {

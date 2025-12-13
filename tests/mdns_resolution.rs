@@ -94,22 +94,39 @@ async fn resolves_srv_record_for_service_instance() {
     let service = TestMdnsService::advertise(daemon.clone(), &["127.0.0.1"], 6300);
     service.allow_propagation().await;
 
-    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(5))
+    let config = create_test_config(5);
+    let discovery_domain = config.discovery_domain().to_string();
+    let resolver = MdnsResolver::with_daemon(daemon, config)
         .expect("failed to create resolver");
-    let srv_name = Name::from_utf8(&service.full_name).expect("invalid service fullname");
+
+    let srv_query = format!(
+        "{}.{}",
+        service.full_name.trim_end_matches(".local."),
+        discovery_domain
+    );
+    let srv_name = Name::from_utf8(&srv_query).expect("invalid service fullname");
 
     let records = query_with_retry(&resolver, &srv_name, RecordType::SRV).await;
 
     assert!(
         records.iter().any(|record| {
             if let RData::SRV(srv) = record.data() {
-                srv.port() == service.port && srv.target().to_utf8() == service.host_name
+                let expected_target = format!(
+                    "{}.{}",
+                    service.host_name.trim_end_matches(".local."),
+                    discovery_domain
+                );
+                srv.port() == service.port && srv.target().to_utf8() == expected_target
             } else {
                 false
             }
         }),
         "expected SRV record pointing at {}:{} but found {:?}",
-        service.host_name,
+        format!(
+            "{}.{}",
+            service.host_name.trim_end_matches(".local."),
+            discovery_domain
+        ),
         service.port,
         records
     );

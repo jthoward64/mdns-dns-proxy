@@ -1,4 +1,4 @@
-use hickory_proto::rr::{Name, Record, RecordType};
+use hickory_proto::rr::{Name, Record, RecordType, RData};
 use mdns_sd::{IfKind, ServiceDaemon};
 use std::sync::Arc;
 use tracing::{debug, warn};
@@ -55,8 +55,11 @@ impl MdnsResolver {
         record_type: RecordType,
     ) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
         let query_name = name.to_utf8();
+
+        let mdns_name = map_query_to_local(name, self.config.discovery_domain())?;
+        let mdns_query = mdns_name.to_utf8();
         
-        debug!("Querying mDNS for {} (type: {:?})", query_name, record_type);
+        debug!("Querying mDNS for {} (mapped to {} for mDNS, type: {:?})", query_name, mdns_query, record_type);
 
         // Check cache first
         if let Some(cached) = self.cache.get(&query_name, record_type) {
@@ -65,18 +68,21 @@ impl MdnsResolver {
         }
 
         // Perform mDNS query based on record type
-        let mut records = match record_type {
-            RecordType::A | RecordType::AAAA => query::query_a_aaaa(&self.daemon, name, &self.config).await?,
-            RecordType::PTR => query::query_ptr(&self.daemon, name, &self.config).await?,
-            RecordType::SRV => query::query_srv(&self.daemon, name, &self.config).await?,
-            RecordType::TXT => query::query_txt(&self.daemon, name, &self.config).await?,
-            RecordType::SOA => query::query_soa(&self.daemon, name).await?,
-            RecordType::NS => query::query_ns(&self.daemon, name).await?,
+        let mdns_records = match record_type {
+            RecordType::A | RecordType::AAAA => query::query_a_aaaa(&self.daemon, &mdns_name, &self.config).await?,
+            RecordType::PTR => query::query_ptr(&self.daemon, &mdns_name, &self.config).await?,
+            RecordType::SRV => query::query_srv(&self.daemon, &mdns_name, &self.config).await?,
+            RecordType::TXT => query::query_txt(&self.daemon, &mdns_name, &self.config).await?,
+            RecordType::SOA => query::query_soa(&self.daemon, &mdns_name).await?,
+            RecordType::NS => query::query_ns(&self.daemon, &mdns_name).await?,
             _ => {
                 warn!("Unsupported record type: {:?}", record_type);
                 Vec::new()
             }
         };
+
+        // Rewrite returned records from .local to the configured discovery domain
+        let mut records = rewrite_records_to_discovery_domain(mdns_records, self.config.discovery_domain())?;
 
         // Cap TTLs at 10 seconds per RFC 8766 Section 5.5.1
         // This ensures remote clients receive timely updates
@@ -112,4 +118,96 @@ impl MdnsResolver {
             Ok(records)
         }
     }
+}
+
+fn map_query_to_local(name: &Name, discovery_domain: &str) -> Result<Name, Box<dyn std::error::Error + Send + Sync>> {
+    let mut mapped = name.to_utf8().to_lowercase();
+    let disc = discovery_domain.to_lowercase();
+    let disc_no_dot = disc.trim_end_matches('.');
+
+    let mapped_to_local = if mapped.ends_with(&disc) {
+        let prefix = mapped[..mapped.len() - disc.len()]
+            .trim_end_matches('.')
+            .to_string();
+        Some(prefix)
+    } else if mapped.ends_with(disc_no_dot) {
+        let prefix = mapped[..mapped.len() - disc_no_dot.len()]
+            .trim_end_matches('.')
+            .to_string();
+        Some(prefix)
+    } else {
+        None
+    };
+
+    if let Some(prefix) = mapped_to_local {
+        mapped = format!("{}.local.", prefix);
+    }
+
+    Ok(Name::from_utf8(&mapped)?)
+}
+
+fn rewrite_name_to_discovery(name: &Name, discovery_domain: &str) -> Result<Name, Box<dyn std::error::Error + Send + Sync>> {
+    let mut n = name.to_utf8();
+    let disc = discovery_domain.to_lowercase();
+    let local = "local.";
+    let lower = n.to_lowercase();
+    if lower.ends_with(local) {
+        n.truncate(n.len() - local.len());
+        n.push_str(&disc);
+        return Ok(Name::from_utf8(&n)?);
+    }
+    Ok(name.clone())
+}
+
+fn rewrite_records_to_discovery_domain(records: Vec<Record>, discovery_domain: &str) -> Result<Vec<Record>, Box<dyn std::error::Error + Send + Sync>> {
+    let mut out = Vec::with_capacity(records.len());
+    for record in records.into_iter() {
+        let mut new_record = record.clone();
+        let new_name = rewrite_name_to_discovery(record.name(), discovery_domain)?;
+        new_record.set_name(new_name);
+
+        let maybe_new_data = match record.data() {
+            RData::PTR(ptr) => {
+                let target = rewrite_name_to_discovery(&ptr.0, discovery_domain)?;
+                Some(RData::PTR(hickory_proto::rr::rdata::PTR(target)))
+            }
+            RData::SRV(srv) => {
+                let target = rewrite_name_to_discovery(srv.target(), discovery_domain)?;
+                Some(RData::SRV(hickory_proto::rr::rdata::SRV::new(
+                    srv.priority(),
+                    srv.weight(),
+                    srv.port(),
+                    target,
+                )))
+            }
+            RData::NS(ns) => {
+                let target = rewrite_name_to_discovery(&ns.0, discovery_domain)?;
+                Some(RData::NS(hickory_proto::rr::rdata::NS(target)))
+            }
+            RData::SOA(soa) => {
+                let mname = rewrite_name_to_discovery(soa.mname(), discovery_domain)?;
+                let rname = rewrite_name_to_discovery(soa.rname(), discovery_domain)?;
+                Some(RData::SOA(hickory_proto::rr::rdata::SOA::new(
+                    mname,
+                    rname,
+                    soa.serial(),
+                    soa.refresh(),
+                    soa.retry(),
+                    soa.expire(),
+                    soa.minimum(),
+                )))
+            }
+            _ => None,
+        };
+
+        if let Some(rdata) = maybe_new_data {
+            let ttl = new_record.ttl();
+            let name_clone = new_record.name().clone();
+            new_record = Record::from_rdata(name_clone, ttl, rdata);
+        }
+
+        out.push(new_record);
+    }
+
+    Ok(out)
 }

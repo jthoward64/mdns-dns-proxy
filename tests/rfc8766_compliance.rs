@@ -192,10 +192,12 @@ async fn test_ttl_capping_all_record_types() {
 #[serial]
 async fn test_soa_record_structure() {
     let daemon = Arc::new(ServiceDaemon::new().expect("failed to create daemon"));
-    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(5))
+    let config = create_test_config(5);
+    let discovery_domain = config.discovery_domain().to_string();
+    let resolver = MdnsResolver::with_daemon(daemon, config)
         .expect("failed to create resolver");
     
-    let query_name = Name::from_utf8("test.local.").expect("invalid hostname");
+    let query_name = Name::from_utf8(&format!("test.{}", discovery_domain)).expect("invalid hostname");
     let records = resolver.query(&query_name, RecordType::SOA).await
         .expect("query failed");
     
@@ -215,10 +217,12 @@ async fn test_soa_record_structure() {
 #[serial]
 async fn test_ns_record_structure() {
     let daemon = Arc::new(ServiceDaemon::new().expect("failed to create daemon"));
-    let resolver = MdnsResolver::with_daemon(daemon, create_test_config(5))
+    let config = create_test_config(5);
+    let discovery_domain = config.discovery_domain().to_string();
+    let resolver = MdnsResolver::with_daemon(daemon, config)
         .expect("failed to create resolver");
     
-    let query_name = Name::from_utf8("test.local.").expect("invalid hostname");
+    let query_name = Name::from_utf8(&format!("test.{}", discovery_domain)).expect("invalid hostname");
     let records = resolver.query(&query_name, RecordType::NS).await
         .expect("query failed");
     
@@ -235,7 +239,10 @@ async fn test_ns_record_structure() {
     // Verify NS target is valid
     if let RData::NS(ns) = ns_record.data() {
         assert!(!ns.0.is_empty(), "NS target should not be empty");
-        assert!(ns.0.to_utf8().ends_with(".local."), "NS target should end with .local.");
+        assert!(
+            ns.0.to_utf8().ends_with(&discovery_domain),
+            "NS target should end with the discovery domain"
+        );
     } else {
         panic!("Expected NS record");
     }

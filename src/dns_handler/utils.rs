@@ -4,16 +4,25 @@ use hickory_proto::op::{Header, ResponseCode};
 use tracing::{debug, error, info};
 
 /// Check if a domain name should be handled by the mDNS proxy
-pub fn should_handle_domain(name: &str) -> bool {
+pub fn should_handle_domain(name: &str, discovery_domain: &str) -> bool {
     let name_lower = name.to_lowercase();
-    
-    // Handle .local domain queries (RFC 8766)
-    if name_lower.strip_suffix(".").unwrap_or(&name_lower).split(".").last().unwrap_or("") == "local" {
+    let discovery = discovery_domain.to_lowercase();
+
+    // Normalize by removing leading/trailing dots for comparison
+    let normalized_discovery = discovery.trim_matches('.');
+    let normalized_name = name_lower.trim_end_matches('.');
+    let discovery_suffix = format!(".{}", normalized_discovery);
+
+    let matches_discovery = normalized_name == normalized_discovery
+        || normalized_name.ends_with(&discovery_suffix);
+
+    // Handle configured discovery domain queries (mapped to .local for mDNS)
+    if matches_discovery {
         return true;
     }
     
-    // Handle common mDNS service discovery queries
-    if name_lower.contains("._tcp.") || name_lower.contains("._udp.") {
+    // Handle mDNS service discovery queries only within the discovery domain
+    if (normalized_name.contains("._tcp.") || normalized_name.contains("._udp.")) && matches_discovery {
         return true;
     }
     
