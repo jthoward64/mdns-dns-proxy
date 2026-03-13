@@ -276,35 +276,44 @@ async fn resolve_hostname(
                     debug!("Hostname resolution stopped for {}", hostname);
                 }
                 Ok(HostnameResolutionEvent::AddressesFound(_, addresses)) => {
-                    for addr in addresses {
-                        match addr {
-                            mdns_sd::ScopedIp::V4(ipv4) => {
-                                let ipv4_addr = ipv4.addr();
-                                let name = name_from_labels_str(hostname)?;
-                                let record = Record::from_rdata(
-                                    name,
-                                    120,
-                                    RData::A(hickory_proto::rr::rdata::A::from(*ipv4_addr)),
-                                );
-                                records.push(record);
-
-                                debug!("Found IPv4 address for {}: {}", hostname, ipv4_addr);
+                        for addr in addresses {
+                            match addr {
+                                mdns_sd::ScopedIp::V4(ipv4) => {
+                                    let ipv4_addr = ipv4.addr();
+                                    // Filter out link-local IPv4 (169.254.0.0/16)
+                                    if ipv4_addr.octets()[0] == 169 && ipv4_addr.octets()[1] == 254 {
+                                        debug!("Skipping link-local IPv4 address for {}: {}", hostname, ipv4_addr);
+                                        continue;
+                                    }
+                                    let name = name_from_labels_str(hostname)?;
+                                    let record = Record::from_rdata(
+                                        name,
+                                        120,
+                                        RData::A(hickory_proto::rr::rdata::A::from(*ipv4_addr)),
+                                    );
+                                    records.push(record);
+                                    debug!("Found IPv4 address for {}: {}", hostname, ipv4_addr);
+                                }
+                                mdns_sd::ScopedIp::V6(ipv6) => {
+                                    let ipv6_addr = ipv6.addr();
+                                    // Filter out link-local IPv6 (fe80::/10)
+                                    let octets = ipv6_addr.octets();
+                                    if octets[0] == 0xfe && (octets[1] & 0xc0) == 0x80 {
+                                        debug!("Skipping link-local IPv6 address for {}: {}", hostname, ipv6_addr);
+                                        continue;
+                                    }
+                                    let name = name_from_labels_str(hostname)?;
+                                    let record = Record::from_rdata(
+                                        name,
+                                        120,
+                                        RData::AAAA(hickory_proto::rr::rdata::AAAA::from(*ipv6_addr)),
+                                    );
+                                    records.push(record);
+                                    debug!("Found IPv6 address for {}: {}", hostname, ipv6_addr);
+                                }
+                                _ => {}
                             }
-                            mdns_sd::ScopedIp::V6(ipv6) => {
-                                let ipv6_addr = ipv6.addr();
-                                let name = name_from_labels_str(hostname)?;
-                                let record = Record::from_rdata(
-                                    name,
-                                    120,
-                                    RData::AAAA(hickory_proto::rr::rdata::AAAA::from(*ipv6_addr)),
-                                );
-                                records.push(record);
-
-                                debug!("Found IPv6 address for {}: {}", hostname, ipv6_addr);
-                            }
-                            _ => {}
                         }
-                    }
                 }
                 Ok(HostnameResolutionEvent::AddressesRemoved(_, addresses)) => {
                     for addr in addresses {
